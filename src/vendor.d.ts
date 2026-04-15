@@ -36,10 +36,10 @@
 declare module 'dingtalk-miniapp-opensdk' {
   export const sdk: {
     setConfig: (options: {
-      appKey: string
-      appSecret: string
       accessToken: string
-      host: string
+      appKey?: string
+      appSecret?: string
+      host?: string
     }) => void
     miniUpload: (options: {
       project: string
@@ -56,4 +56,8 @@ declare module 'dingtalk-miniapp-opensdk' {
       packageVersion?: string
     }>
   }
+}
+
+declare module 'tsx/esm/api' {
+  export function tsImport(specifier: string, parentURL?: string): Promise<unknown>
 }

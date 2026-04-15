@@ -43,7 +43,27 @@ export {
 export {
   uploadWeixin,
 }
-export type * from './types'
+export type {
+  AlipayClientType,
+  AlipayConfig,
+  CIConfig,
+  ConfigFactory,
+  ConfigFactoryContext,
+  ConfigSource,
+  DingtalkConfig,
+  DingtalkProjectType,
+  LoadConfigOptions,
+  LoadedConfig,
+  MaybePromise,
+  PackageJsonConfig,
+  PlatformName,
+  PlatformUploadResult,
+  ProjectType,
+  UploadContext,
+  UserConfig,
+  WeixinConfig,
+  WeixinUploadSetting,
+} from './types'
 export {
   uploadPlatform,
 }
