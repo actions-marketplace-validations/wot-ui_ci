@@ -13,4 +13,6 @@ export async function uploadPlatform(platform: PlatformName, config: CIConfig, o
     case 'weixin':
       return uploadWeixin(config, options)
   }
+
+  throw new TypeError(`Unsupported platform: ${String(platform)}`)
 }

@@ -1,26 +1,68 @@
-export {
+import {
   CONFIG_FILE_NAMES,
   defineConfig,
   loadConfig,
 } from './config'
-export {
+import {
   ConfigError,
   UniMiniCIError,
   UploadError,
 } from './errors'
-export {
+import {
   uploadAlipay,
 } from './platforms/alipay'
-export {
+import {
   uploadDingTalk,
 } from './platforms/dingtalk'
-export {
+import {
   uploadWeixin,
 } from './platforms/weixin'
+import {
+  uploadPlatform,
+} from './upload'
+import {
+  compareVersion,
+} from './utils/version'
+
+export {
+  CONFIG_FILE_NAMES,
+  defineConfig,
+  loadConfig,
+}
+export {
+  ConfigError,
+  UniMiniCIError,
+  UploadError,
+}
+export {
+  uploadAlipay,
+}
+export {
+  uploadDingTalk,
+}
+export {
+  uploadWeixin,
+}
 export type * from './types'
 export {
   uploadPlatform,
-} from './upload'
+}
 export {
   compareVersion,
-} from './utils/version'
+}
+
+const minici = {
+  CONFIG_FILE_NAMES,
+  ConfigError,
+  UniMiniCIError,
+  UploadError,
+  compareVersion,
+  defineConfig,
+  loadConfig,
+  uploadAlipay,
+  uploadDingTalk,
+  uploadPlatform,
+  uploadWeixin,
+}
+
+export default minici

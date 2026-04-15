@@ -37,9 +37,12 @@ vi.mock('dingtalk-miniapp-opensdk', () => ({
   },
 }))
 
-const { compareVersion, defineConfig, loadConfig, uploadAlipay, uploadDingTalk, uploadPlatform, uploadWeixin } = await import('../src')
+const miniciModule = await import('../src')
+const { default: minici, compareVersion, defineConfig, loadConfig, uploadAlipay, uploadDingTalk, uploadPlatform, uploadWeixin } = miniciModule
 const { parseCliArgs, runCli } = await import('../src/cli')
-const { UploadError, formatErrorReport } = await import('../src/errors')
+const { formatErrorStack, UploadError, formatErrorReport } = await import('../src/errors')
+const { createCliLogger } = await import('../src/logger')
+const { appendDesc, createCliConfigLoadedMessage, createCliHelpText, createCliUploadStartMessage } = await import('../src/messages')
 
 let tempRoot = ''
 
@@ -59,6 +62,20 @@ afterEach(async () => {
 })
 
 describe('config loading', () => {
+  it('loads inline config factories with package defaults', async () => {
+    const loaded = await loadConfig({
+      config: ({ env, packageJson }) => ({
+        desc: env.CI_TEST_DESC,
+        version: packageJson?.version,
+      }),
+      cwd: tempRoot,
+    })
+
+    expect(loaded.source).toBe('inline')
+    expect(loaded.config.version).toBe('0.0.5')
+    expect(loaded.config.desc).toBe('package description')
+  })
+
   it('loads JS config and resolves env-based values', async () => {
     process.env.UNI_MINI_CI_VERSION = '2.0.0'
     await writeFile(path.join(tempRoot, 'minici.config.js'), [
@@ -148,9 +165,24 @@ describe('config loading', () => {
     const config = defineConfig({ version: '1.0.0' } as const)
     expect(config.version).toBe('1.0.0')
   })
+
+  it('falls back to package defaults when no config source exists', async () => {
+    const loaded = await loadConfig({ cwd: tempRoot })
+
+    expect(loaded.source).toBe('defaults')
+    expect(loaded.config.version).toBe('0.0.5')
+    expect(loaded.config.desc).toBe('package description')
+  })
 })
 
 describe('version comparison', () => {
+  it('supports default import style', () => {
+    expect(minici.loadConfig).toBe(loadConfig)
+    expect(minici.uploadPlatform).toBe(uploadPlatform)
+    expect(minici.defineConfig).toBe(defineConfig)
+    expect(minici.compareVersion).toBe(compareVersion)
+  })
+
   it('compares dot separated versions', () => {
     expect(compareVersion('1.0.0', '1')).toBe(0)
     expect(compareVersion('1.0.1', '1.0.0')).toBe(1)
@@ -253,6 +285,10 @@ describe('platform uploads', () => {
       packageVersion: '',
     }))
   })
+
+  it('rejects unsupported platform names at runtime', async () => {
+    await expect(uploadPlatform('unknown' as never, {}, { cwd: tempRoot })).rejects.toThrow()
+  })
 })
 
 describe('cli', () => {
@@ -262,6 +298,35 @@ describe('cli', () => {
       cwd: '/tmp/example',
       platform: 'dd',
     })
+  })
+
+  it('prints help text', async () => {
+    const stdout: string[] = []
+
+    const exitCode = await runCli(['--help'], {
+      stdout: message => stdout.push(message),
+    })
+
+    expect(exitCode).toBe(0)
+    expect(stdout).toEqual([createCliHelpText()])
+  })
+
+  it('fails when platform is missing', async () => {
+    const stdout: string[] = []
+    const stderr: string[] = []
+
+    const exitCode = await runCli([], {
+      stderr: message => stderr.push(message),
+      stdout: message => stdout.push(message),
+    })
+
+    expect(exitCode).toBe(1)
+    expect(stderr).toContain('[失败] 缺少必填参数：--platform')
+    expect(stdout).toContain(createCliHelpText())
+  })
+
+  it('rejects unknown arguments', () => {
+    expect(() => parseCliArgs(['--unknown'])).toThrow('未知参数：--unknown')
   })
 
   it('loads legacy .minicirc and uploads via dd alias', async () => {
@@ -316,5 +381,49 @@ describe('error formatting', () => {
       '外层错误',
       '原因 1: 底层错误',
     ])
+  })
+
+  it('handles circular causes and stack formatting', () => {
+    const error = new Error('循环错误') as Error & { cause?: unknown }
+    error.cause = error
+
+    expect(formatErrorReport(error)).toEqual([
+      '循环错误',
+      '原因 1: 检测到循环错误引用',
+    ])
+    expect(formatErrorStack(new Error('stack error')).length).toBeGreaterThan(0)
+    expect(formatErrorStack('plain error')).toEqual([])
+  })
+})
+
+describe('cli utilities', () => {
+  it('formats logger output with custom writers', () => {
+    const stdout: string[] = []
+    const stderr: string[] = []
+    const logger = createCliLogger({
+      stderr: message => stderr.push(message),
+      stdout: message => stdout.push(message),
+    })
+
+    logger.info('hello')
+    logger.start('start')
+    logger.success('ok')
+    logger.error(new Error('boom'))
+    logger.log('plain', 1)
+
+    expect(stdout).toEqual([
+      '[信息] hello',
+      '[开始] start',
+      '[成功] ok',
+      'plain 1',
+    ])
+    expect(stderr).toEqual(['[失败] boom'])
+  })
+
+  it('formats message helpers', () => {
+    expect(createCliConfigLoadedMessage('defaults')).toBe('配置加载完成，来源：默认配置')
+    expect(createCliUploadStartMessage('weixin')).toBe('开始上传微信小程序...')
+    expect(appendDesc('上传成功', 'release')).toBe('上传成功，描述：release')
+    expect(appendDesc('上传成功')).toBe('上传成功')
   })
 })

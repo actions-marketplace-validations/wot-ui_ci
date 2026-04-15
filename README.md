@@ -127,6 +127,17 @@ console.log(loaded.source)
 console.log(loaded.config)
 ```
 
+也支持默认导入风格：
+
+```ts
+import minici from '@wot-ui/ci'
+
+const loaded = await minici.loadConfig()
+const result = await minici.uploadPlatform('weixin', loaded.config, { cwd: loaded.cwd })
+
+console.log(result.message)
+```
+
 ### 按平台上传
 
 ```ts
@@ -227,6 +238,7 @@ DINGTALK_APPID=xxx DINGTALK_TOKEN=xxx pnpm upload:playground:dingtalk
 - uploadDingTalk
 - uploadPlatform
 - compareVersion
+- default: minici
 
 ### 错误模型
 

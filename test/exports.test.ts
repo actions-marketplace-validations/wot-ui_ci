@@ -1,26 +1,25 @@
-import { x } from 'tinyexec'
+import { readFile } from 'node:fs/promises'
+import path from 'node:path'
 import { describe, expect, it } from 'vitest'
-import { getPackageExportsManifest } from 'vitest-package-exports'
-import yaml from 'yaml'
 
-// TODO: remove this when you are ready for the first release
-const IS_READY = false
+const packageJsonPath = path.resolve(import.meta.dirname, '../package.json')
 
-describe.runIf(IS_READY)('exports-snapshot', async () => {
-  const packages: { name: string, path: string, private?: boolean }[] = JSON.parse(
-    await x('pnpm', ['ls', '--only-projects', '-r', '--json']).then(r => r.stdout),
-  )
+describe('package exports', () => {
+  it('declares the public package entrypoints', async () => {
+    const packageJson = JSON.parse(await readFile(packageJsonPath, 'utf8')) as {
+      bin?: Record<string, string>
+      exports?: Record<string, string>
+      main?: string
+      types?: string
+    }
 
-  for (const pkg of packages) {
-    if (pkg.private)
-      continue
-    it(`${pkg.name}`, async () => {
-      const manifest = await getPackageExportsManifest({
-        importMode: 'src',
-        cwd: pkg.path,
-      })
-      await expect(yaml.stringify(manifest.exports))
-        .toMatchFileSnapshot(`./exports/${pkg.name}.yaml`)
+    expect(packageJson.exports).toEqual({
+      '.': './dist/index.mjs',
+      './cli': './dist/cli.mjs',
+      './package.json': './package.json',
     })
-  }
+    expect(packageJson.main).toBe('./dist/index.mjs')
+    expect(packageJson.types).toBe('./dist/index.d.mts')
+    expect(packageJson.bin?.minici).toBe('./dist/cli.mjs')
+  })
 })
