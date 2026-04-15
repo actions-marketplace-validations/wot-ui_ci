@@ -52,6 +52,7 @@
     "upload:playground:dingtalk": "pnpm --dir playground build:mp-alipay && pnpm exec tsx ./src/cli.ts --cwd playground --config minici.config.ts --platform dingtalk"
   },
   "dependencies": {
+    "consola": "catalog:",
     "dingtalk-miniapp-opensdk": "catalog:",
     "json5": "catalog:",
     "minidev": "catalog:",

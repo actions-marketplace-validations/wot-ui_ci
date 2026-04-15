@@ -22,18 +22,6 @@ export function getConfigSourceLabel(source: ConfigSource): string {
   return configSourceLabelMap[source]
 }
 
-export function createCliInfoMessage(message: string): string {
-  return `[信息] ${message}`
-}
-
-export function createCliSuccessMessage(message: string): string {
-  return `[成功] ${message}`
-}
-
-export function createCliErrorMessage(message: string): string {
-  return `[失败] ${message}`
-}
-
 export function createCliConfigLoadedMessage(source: ConfigSource, sourceFile?: string): string {
   const label = getConfigSourceLabel(source)
   return sourceFile

@@ -5,12 +5,10 @@ import process from 'node:process'
 import { fileURLToPath } from 'node:url'
 import { loadConfig } from './config'
 import { ConfigError, UploadError } from './errors'
+import { createCliLogger } from './logger'
 import {
   createCliConfigLoadedMessage,
-  createCliErrorMessage,
   createCliHelpText,
-  createCliInfoMessage,
-  createCliSuccessMessage,
   createCliUploadStartMessage,
 } from './messages'
 import { uploadPlatform } from './upload'
@@ -29,20 +27,19 @@ interface ParsedCliArgs {
 }
 
 export async function runCli(argv: string[] = process.argv.slice(2), options: RunCliOptions = {}): Promise<number> {
-  const stdout = options.stdout ?? console.log
-  const stderr = options.stderr ?? console.error
+  const logger = createCliLogger(options)
 
   try {
     const args = parseCliArgs(argv)
 
     if (args.help) {
-      stdout(createCliHelpText())
+      logger.log(createCliHelpText())
       return 0
     }
 
     if (!args.platform) {
-      stderr(createCliErrorMessage('缺少必填参数：--platform'))
-      stderr(createCliHelpText())
+      logger.error('缺少必填参数：--platform')
+      logger.log(createCliHelpText())
       return 1
     }
 
@@ -51,21 +48,21 @@ export async function runCli(argv: string[] = process.argv.slice(2), options: Ru
       configFile: args.configFile,
       cwd: args.cwd ?? options.cwd,
     })
-    stdout(createCliInfoMessage(createCliConfigLoadedMessage(loaded.source, loaded.sourceFile)))
-    stdout(createCliInfoMessage(createCliUploadStartMessage(platform)))
+    logger.info(createCliConfigLoadedMessage(loaded.source, loaded.sourceFile))
+    logger.start(createCliUploadStartMessage(platform))
     const result = await uploadPlatform(platform, loaded.config, { cwd: loaded.cwd })
 
-    stdout(createCliSuccessMessage(result.message))
+    logger.success(result.message)
     return 0
   }
   catch (error) {
     if (error instanceof ConfigError || error instanceof UploadError) {
-      stderr(createCliErrorMessage(error.message))
+      logger.error(error.message)
       return 1
     }
 
     const message = error instanceof Error ? error.message : String(error)
-    stderr(createCliErrorMessage(`发生未预期错误：${message}`))
+    logger.error(`发生未预期错误：${message}`)
     return 1
   }
 }

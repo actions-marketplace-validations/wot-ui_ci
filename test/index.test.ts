@@ -284,7 +284,7 @@ describe('cli', () => {
     expect(exitCode).toBe(0)
     expect(stderr).toEqual([])
     expect(stdout).toContain(`[信息] 配置加载完成，来源：.minicirc 配置文件（${path.join(tempRoot, '.minicirc')}）`)
-    expect(stdout).toContain('[信息] 开始上传钉钉小程序...')
+    expect(stdout).toContain('[开始] 开始上传钉钉小程序...')
     expect(stdout.some(line => line.includes('[成功] 钉钉小程序上传成功，版本：1.0.2'))).toBe(true)
     expect(dingTalkMiniUpload).toHaveBeenCalledWith(expect.objectContaining({
       miniAppId: 'dd-legacy',

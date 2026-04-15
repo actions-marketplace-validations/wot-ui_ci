@@ -18,6 +18,7 @@ packages:
   - examples/*
 
 catalog:
+  consola: ^3.4.2
   dingtalk-miniapp-opensdk: ^1.0.8
   json5: ^2.2.3
   minidev: ^1.8.4

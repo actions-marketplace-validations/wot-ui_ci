@@ -104,6 +104,9 @@ catalogs:
       specifier: 3.0.0-4080420251103001
       version: 3.0.0-4080420251103001
   default:
+    consola:
+      specifier: ^3.4.2
+      version: 3.4.2
     dingtalk-miniapp-opensdk:
       specifier: ^1.0.8
       version: 1.0.8
@@ -169,6 +172,9 @@ importers:
 
   .:
     dependencies:
+      consola:
+        specifier: 'catalog:'
+        version: 3.4.2
       dingtalk-miniapp-opensdk:
         specifier: 'catalog:'
         version: 1.0.8(proxy-agent@5.0.0)
