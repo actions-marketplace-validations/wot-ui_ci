@@ -1,0 +1,64 @@
+name: Upload Playground Mini Program
+
+on:
+  workflow_dispatch:
+    inputs:
+      platform:
+        description: Target platform
+        required: true
+        type: choice
+        options:
+          - weixin
+          - alipay
+          - dingtalk
+      version:
+        description: Upload version override
+        required: false
+        type: string
+      desc:
+        description: Upload description override
+        required: false
+        type: string
+
+jobs:
+  upload:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    env:
+      MINICI_VERSION: ${{ inputs.version }}
+      MINICI_DESC: ${{ inputs.desc }}
+      WEIXIN_APPID: ${{ secrets.WEIXIN_APPID }}
+      WEIXIN_PRIVATE_KEY_PATH: playground/keys/weixin.private.key
+      WEIXIN_PROJECT_PATH: dist/build/mp-weixin
+      WEIXIN_ROBOT: ${{ secrets.WEIXIN_ROBOT }}
+      ALIPAY_APPID: ${{ secrets.ALIPAY_APPID }}
+      ALIPAY_TOOL_ID: ${{ secrets.ALIPAY_TOOL_ID }}
+      ALIPAY_PRIVATE_KEY: ${{ secrets.ALIPAY_PRIVATE_KEY }}
+      ALIPAY_PROJECT_PATH: dist/build/mp-alipay
+      ALIPAY_CLIENT_TYPE: ${{ secrets.ALIPAY_CLIENT_TYPE }}
+      ALIPAY_AUTOINCREMENT: ${{ secrets.ALIPAY_AUTOINCREMENT }}
+      DINGTALK_APPID: ${{ secrets.DINGTALK_APPID }}
+      DINGTALK_TOKEN: ${{ secrets.DINGTALK_TOKEN }}
+      DINGTALK_PROJECT_PATH: ${{ secrets.DINGTALK_PROJECT_PATH }}
+      DINGTALK_AUTOINCREMENT: ${{ secrets.DINGTALK_AUTOINCREMENT }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+        with:
+          run_install: false
+      - uses: actions/setup-node@v4
+        with:
+          node-version: lts/*
+          cache: pnpm
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile --ignore-scripts
+      - name: Write Weixin private key
+        if: ${{ inputs.platform == 'weixin' }}
+        run: |
+          mkdir -p playground/keys
+          printf '%s' "$WEIXIN_PRIVATE_KEY" > playground/keys/weixin.private.key
+        env:
+          WEIXIN_PRIVATE_KEY: ${{ secrets.WEIXIN_PRIVATE_KEY }}
+      - name: Upload playground
+        run: pnpm upload:playground:${{ inputs.platform }}
