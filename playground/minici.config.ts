@@ -1,4 +1,3 @@
-import type { AlipayClientType } from '../src'
 import { defineConfig } from '../src'
 
 function resolveOptionalString(value?: string): string | undefined {
@@ -30,40 +29,6 @@ function resolveBoolean(value?: string): boolean | undefined {
   return value === 'true'
 }
 
-function resolveAlipayClientType(value?: string): AlipayClientType {
-  return (resolveOptionalString(value) ?? 'alipay') as AlipayClientType
-}
-
-function createAlipayConfig(env: NodeJS.ProcessEnv) {
-  if (!env.ALIPAY_APPID || !env.ALIPAY_TOOL_ID)
-    return undefined
-
-  const baseConfig = {
-    appid: env.ALIPAY_APPID,
-    toolId: env.ALIPAY_TOOL_ID,
-    projectPath: resolvePlaygroundPath(env.ALIPAY_PROJECT_PATH, 'dist/build/mp-alipay'),
-    clientType: resolveAlipayClientType(env.ALIPAY_CLIENT_TYPE),
-    autoincrement: resolveBoolean(env.ALIPAY_AUTOINCREMENT) ?? true,
-  }
-
-  const alipayPrivateKey = resolveOptionalString(env.ALIPAY_PRIVATE_KEY)
-  if (alipayPrivateKey) {
-    return {
-      ...baseConfig,
-      privateKey: alipayPrivateKey,
-    }
-  }
-
-  if (resolveOptionalString(env.ALIPAY_PRIVATE_KEY_PATH)) {
-    return {
-      ...baseConfig,
-      privateKeyPath: resolvePlaygroundPath(env.ALIPAY_PRIVATE_KEY_PATH, 'keys/alipay.private.key'),
-    }
-  }
-
-  return undefined
-}
-
 export default defineConfig(({ env, packageJson }) => ({
   version: resolveOptionalString(env.MINICI_VERSION) ?? packageJson?.version,
   desc: resolveOptionalString(env.MINICI_DESC) ?? packageJson?.description,
@@ -78,7 +43,15 @@ export default defineConfig(({ env, packageJson }) => ({
         },
       }
     : undefined,
-  alipay: createAlipayConfig(env),
+  alipay: env.ALIPAY_APPID && env.ALIPAY_TOOL_ID
+    ? {
+        toolId: env.ALIPAY_TOOL_ID,
+        appid: env.ALIPAY_APPID,
+        privateKey: env.ALIPAY_PRIVATE_KEY!,
+        projectPath: resolvePlaygroundPath(env.ALIPAY_PROJECT_PATH, 'dist/build/mp-alipay'),
+        autoincrement: resolveBoolean(env.ALIPAY_AUTOINCREMENT) ?? true,
+      }
+    : undefined,
   dingtalk: env.DINGTALK_APPID && env.DINGTALK_TOKEN
     ? {
         appid: env.DINGTALK_APPID,
