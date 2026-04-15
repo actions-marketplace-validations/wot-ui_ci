@@ -39,6 +39,7 @@ vi.mock('dingtalk-miniapp-opensdk', () => ({
 
 const { compareVersion, defineConfig, loadConfig, uploadAlipay, uploadDingTalk, uploadPlatform, uploadWeixin } = await import('../src')
 const { parseCliArgs, runCli } = await import('../src/cli')
+const { UploadError, formatErrorReport } = await import('../src/errors')
 
 let tempRoot = ''
 
@@ -291,5 +292,29 @@ describe('cli', () => {
       packageVersion: '6.0.0',
       project: path.join(tempRoot, 'dist/legacy-dd'),
     }))
+  })
+
+  it('prints nested cause messages for expected errors', async () => {
+    const stderr: string[] = []
+
+    const exitCode = await runCli(['--platform', 'alipay'], {
+      cwd: tempRoot,
+      stderr: message => stderr.push(message),
+      stdout: () => {},
+    })
+
+    expect(exitCode).toBe(1)
+    expect(stderr.some(line => line.includes('缺少支付宝小程序上传配置'))).toBe(true)
+  })
+})
+
+describe('error formatting', () => {
+  it('formats cause chain in order', () => {
+    const error = new UploadError('外层错误', new Error('底层错误'))
+
+    expect(formatErrorReport(error)).toEqual([
+      '外层错误',
+      '原因 1: 底层错误',
+    ])
   })
 })

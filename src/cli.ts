@@ -4,7 +4,7 @@ import type { PlatformName } from './types'
 import process from 'node:process'
 import { fileURLToPath } from 'node:url'
 import { loadConfig } from './config'
-import { ConfigError, UploadError } from './errors'
+import { ConfigError, formatErrorReport, formatErrorStack, UploadError } from './errors'
 import { createCliLogger } from './logger'
 import {
   createCliConfigLoadedMessage,
@@ -57,12 +57,13 @@ export async function runCli(argv: string[] = process.argv.slice(2), options: Ru
   }
   catch (error) {
     if (error instanceof ConfigError || error instanceof UploadError) {
-      logger.error(error.message)
+      logError(logger, error)
       return 1
     }
 
     const message = error instanceof Error ? error.message : String(error)
     logger.error(`发生未预期错误：${message}`)
+    logError(logger, error, { includeStack: true, skipFirstLine: true })
     return 1
   }
 }
@@ -116,4 +117,25 @@ if (process.argv[1] && fileURLToPath(import.meta.url) === process.argv[1]) {
   runCli().then((exitCode) => {
     process.exitCode = exitCode
   })
+}
+
+function logError(
+  logger: Pick<ReturnType<typeof createCliLogger>, 'error'>,
+  error: unknown,
+  options: {
+    includeStack?: boolean
+    skipFirstLine?: boolean
+  } = {},
+): void {
+  const reportLines = formatErrorReport(error)
+  const lines = options.skipFirstLine ? reportLines.slice(1) : reportLines
+
+  for (const line of lines)
+    logger.error(line)
+
+  if (!options.includeStack)
+    return
+
+  for (const line of formatErrorStack(error))
+    logger.error(`堆栈: ${line}`)
 }
