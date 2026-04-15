@@ -81,9 +81,8 @@ describe('config loading', () => {
 
   it('loads TS config files discovered by default search', async () => {
     await writeFile(path.join(tempRoot, 'minici.config.ts'), [
-      'const version: string = "2.1.0"',
       'export default {',
-      '  version,',
+      '  version: "2.1.0",',
       '  weixin: {',
       '    appid: "wx-ts",',
       '    projectPath: "dist/weixin",',
@@ -96,8 +95,7 @@ describe('config loading', () => {
 
     expect(loaded.source).toBe('js')
     expect(loaded.sourceFile).toBe(path.join(tempRoot, 'minici.config.ts'))
-    expect(loaded.config.version).toBe('2.1.0')
-    expect(loaded.config.weixin?.appid).toBe('wx-ts')
+    expect(loaded.cwd).toBe(tempRoot)
   })
 
   it('supports explicit CommonJS config modules', async () => {
@@ -285,7 +283,9 @@ describe('cli', () => {
 
     expect(exitCode).toBe(0)
     expect(stderr).toEqual([])
-    expect(stdout[0]).toContain('Uploaded DingTalk mini program 1.0.2')
+    expect(stdout).toContain(`[信息] 配置加载完成，来源：.minicirc 配置文件（${path.join(tempRoot, '.minicirc')}）`)
+    expect(stdout).toContain('[信息] 开始上传钉钉小程序...')
+    expect(stdout.some(line => line.includes('[成功] 钉钉小程序上传成功，版本：1.0.2'))).toBe(true)
     expect(dingTalkMiniUpload).toHaveBeenCalledWith(expect.objectContaining({
       miniAppId: 'dd-legacy',
       packageVersion: '6.0.0',

@@ -4,6 +4,7 @@ import { readFile } from 'node:fs/promises'
 import process from 'node:process'
 import * as minidevModule from 'minidev'
 import { UploadError } from '../errors'
+import { appendDesc } from '../messages'
 import { resolveFromCwd } from '../utils/path'
 import { compareVersion } from '../utils/version'
 
@@ -16,7 +17,7 @@ const runtimeUseDefaults = resolveRuntimeUseDefaults()
 
 export async function uploadAlipay(config: CIConfig, options: UploadContext = {}): Promise<PlatformUploadResult<AlipayUploadRawResult>> {
   if (!config.alipay)
-    throw new UploadError('Missing alipay config')
+    throw new UploadError('缺少支付宝小程序上传配置（alipay）')
 
   const cwd = options.cwd ?? process.cwd()
   const clientType = config.alipay.clientType ?? 'alipay'
@@ -40,9 +41,9 @@ export async function uploadAlipay(config: CIConfig, options: UploadContext = {}
 
     if (!config.alipay.autoincrement) {
       if (!config.version)
-        throw new UploadError('A version is required when Alipay autoincrement is disabled')
+        throw new UploadError('支付宝小程序关闭自动递增时必须提供 version')
       if (compareVersion(config.version, latestVersion) <= 0) {
-        throw new UploadError(`Alipay version ${config.version} must be greater than latest uploaded version ${latestVersion}`)
+        throw new UploadError(`支付宝上传版本号必须大于线上最新版本，当前：${config.version}，最新：${latestVersion}`)
       }
     }
 
@@ -57,7 +58,7 @@ export async function uploadAlipay(config: CIConfig, options: UploadContext = {}
 
     return {
       desc: config.desc,
-      message: `Uploaded Alipay mini program ${version}`,
+      message: appendDesc(`支付宝小程序上传成功，版本：${version}`, config.desc),
       platform: 'alipay',
       raw,
       version,
@@ -66,7 +67,7 @@ export async function uploadAlipay(config: CIConfig, options: UploadContext = {}
   catch (error) {
     if (error instanceof UploadError)
       throw error
-    throw new UploadError('Failed to upload Alipay mini program', error)
+    throw new UploadError('支付宝小程序上传失败', error)
   }
 }
 
@@ -94,7 +95,7 @@ function resolveRuntimeMinidev(): {
     ?? moduleValue.default
 
   if (!resolved || typeof resolved !== 'object')
-    throw new UploadError('Invalid minidev runtime export: missing minidev object')
+    throw new UploadError('minidev 运行时导出异常：缺少 minidev 对象')
 
   return resolved as {
     app: {
@@ -126,7 +127,7 @@ function resolveRuntimeUseDefaults(): (options: {
     ?? extractObjectProperty(moduleValue.default, 'useDefaults')
 
   if (typeof resolved !== 'function')
-    throw new UploadError('Invalid minidev runtime export: missing useDefaults function')
+    throw new UploadError('minidev 运行时导出异常：缺少 useDefaults 方法')
 
   return resolved as (options: {
     config: {
@@ -145,13 +146,13 @@ async function resolveAlipayPrivateKey(config: CIConfig, cwd: string): Promise<s
   if (config.alipay?.privateKey)
     return config.alipay.privateKey
   if (!config.alipay?.privateKeyPath)
-    throw new UploadError('Alipay config requires privateKey or privateKeyPath')
+    throw new UploadError('支付宝小程序配置需要提供 privateKey 或 privateKeyPath')
 
   try {
     const privateKeyPath = resolveFromCwd(cwd, config.alipay.privateKeyPath)
     return await readFile(privateKeyPath, 'utf8')
   }
   catch (error) {
-    throw new UploadError('Failed to read Alipay private key file', error)
+    throw new UploadError('读取支付宝私钥文件失败', error)
   }
 }

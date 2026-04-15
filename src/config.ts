@@ -99,7 +99,7 @@ async function loadPackageJson(cwd: string): Promise<PackageJsonConfig | undefin
     return JSON.parse(source) as PackageJsonConfig
   }
   catch (error) {
-    throw new ConfigError(`Failed to read package.json from ${packageJsonPath}`, error)
+    throw new ConfigError(`读取 package.json 失败：${packageJsonPath}`, error)
   }
 }
 
@@ -118,13 +118,13 @@ async function loadMinicirc(filePath: string): Promise<CIConfig> {
     const source = await readFile(filePath, 'utf8')
     const parsed = JSON5.parse(source) as unknown
     if (!isConfigObject(parsed))
-      throw new ConfigError(`Config file ${filePath} must export an object`)
+      throw new ConfigError(`配置文件必须导出对象：${filePath}`)
     return parsed
   }
   catch (error) {
     if (error instanceof ConfigError)
       throw error
-    throw new ConfigError(`Failed to parse config file ${filePath}`, error)
+    throw new ConfigError(`解析配置文件失败：${filePath}`, error)
   }
 }
 
@@ -137,7 +137,7 @@ async function loadModuleConfig(filePath: string, context: ConfigFactoryContext)
     return await resolveConfigValue(configValue as UserConfig, context)
   }
   catch (error) {
-    throw new ConfigError(`Failed to load config module ${filePath}`, error)
+    throw new ConfigError(`加载配置模块失败：${filePath}`, error)
   }
 }
 
@@ -147,7 +147,7 @@ async function resolveConfigValue(config: UserConfig, context: ConfigFactoryCont
     : config
 
   if (!isConfigObject(resolved))
-    throw new ConfigError('Config must resolve to an object')
+    throw new ConfigError('配置解析结果必须是对象')
 
   return normalizeConfig(resolved)
 }

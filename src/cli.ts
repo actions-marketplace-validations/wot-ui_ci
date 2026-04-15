@@ -5,6 +5,14 @@ import process from 'node:process'
 import { fileURLToPath } from 'node:url'
 import { loadConfig } from './config'
 import { ConfigError, UploadError } from './errors'
+import {
+  createCliConfigLoadedMessage,
+  createCliErrorMessage,
+  createCliHelpText,
+  createCliInfoMessage,
+  createCliSuccessMessage,
+  createCliUploadStartMessage,
+} from './messages'
 import { uploadPlatform } from './upload'
 
 export interface RunCliOptions {
@@ -28,13 +36,13 @@ export async function runCli(argv: string[] = process.argv.slice(2), options: Ru
     const args = parseCliArgs(argv)
 
     if (args.help) {
-      stdout(getHelpText())
+      stdout(createCliHelpText())
       return 0
     }
 
     if (!args.platform) {
-      stderr('Missing required option: --platform')
-      stderr(getHelpText())
+      stderr(createCliErrorMessage('缺少必填参数：--platform'))
+      stderr(createCliHelpText())
       return 1
     }
 
@@ -43,19 +51,21 @@ export async function runCli(argv: string[] = process.argv.slice(2), options: Ru
       configFile: args.configFile,
       cwd: args.cwd ?? options.cwd,
     })
+    stdout(createCliInfoMessage(createCliConfigLoadedMessage(loaded.source, loaded.sourceFile)))
+    stdout(createCliInfoMessage(createCliUploadStartMessage(platform)))
     const result = await uploadPlatform(platform, loaded.config, { cwd: loaded.cwd })
 
-    stdout(result.message)
+    stdout(createCliSuccessMessage(result.message))
     return 0
   }
   catch (error) {
     if (error instanceof ConfigError || error instanceof UploadError) {
-      stderr(error.message)
+      stderr(createCliErrorMessage(error.message))
       return 1
     }
 
     const message = error instanceof Error ? error.message : String(error)
-    stderr(message)
+    stderr(createCliErrorMessage(`发生未预期错误：${message}`))
     return 1
   }
 }
@@ -83,7 +93,7 @@ export function parseCliArgs(argv: string[]): ParsedCliArgs {
         parsed.cwd = readOptionValue(argv, ++index, current)
         break
       default:
-        throw new ConfigError(`Unknown option: ${current}`)
+        throw new ConfigError(`未知参数：${current}`)
     }
   }
 
@@ -93,7 +103,7 @@ export function parseCliArgs(argv: string[]): ParsedCliArgs {
 function readOptionValue(argv: string[], index: number, optionName: string): string {
   const value = argv[index]
   if (!value)
-    throw new ConfigError(`Missing value for option: ${optionName}`)
+    throw new ConfigError(`参数缺少值：${optionName}`)
   return value
 }
 
@@ -102,19 +112,7 @@ function normalizePlatform(platform: ParsedCliArgs['platform']): PlatformName {
     return 'dingtalk'
   if (platform === 'weixin' || platform === 'alipay' || platform === 'dingtalk')
     return platform
-  throw new ConfigError(`Unsupported platform: ${platform ?? 'unknown'}`)
-}
-
-function getHelpText(): string {
-  return [
-    'Usage: minici --platform <weixin|alipay|dingtalk|dd> [options]',
-    '',
-    'Options:',
-    '  -p, --platform <name>  Target platform',
-    '  -c, --config <file>    Explicit config file path',
-    '      --cwd <dir>        Resolve config from a specific working directory',
-    '  -h, --help             Show this message',
-  ].join('\n')
+  throw new ConfigError(`不支持的平台：${platform ?? 'unknown'}`)
 }
 
 if (process.argv[1] && fileURLToPath(import.meta.url) === process.argv[1]) {

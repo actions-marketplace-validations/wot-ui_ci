@@ -3,6 +3,7 @@ import { access } from 'node:fs/promises'
 import process from 'node:process'
 import * as ci from 'miniprogram-ci'
 import { UploadError } from '../errors'
+import { appendDesc } from '../messages'
 import { resolveFromCwd } from '../utils/path'
 
 interface WeixinSubPackageInfo {
@@ -16,9 +17,9 @@ interface WeixinUploadRawResult {
 
 export async function uploadWeixin(config: CIConfig, options: UploadContext = {}): Promise<PlatformUploadResult<WeixinUploadRawResult>> {
   if (!config.weixin)
-    throw new UploadError('Missing weixin config')
+    throw new UploadError('缺少微信小程序上传配置（weixin）')
   if (!config.version)
-    throw new UploadError('A version is required to upload Weixin mini programs')
+    throw new UploadError('微信小程序上传需要提供 version')
 
   const cwd = options.cwd ?? process.cwd()
   const projectPath = resolveFromCwd(cwd, config.weixin.projectPath)
@@ -28,7 +29,7 @@ export async function uploadWeixin(config: CIConfig, options: UploadContext = {}
     await access(privateKeyPath)
   }
   catch (error) {
-    throw new UploadError(`Weixin private key file does not exist: ${privateKeyPath}`, error)
+    throw new UploadError(`微信私钥文件不存在：${privateKeyPath}`, error)
   }
 
   try {
@@ -50,29 +51,29 @@ export async function uploadWeixin(config: CIConfig, options: UploadContext = {}
 
     return {
       desc: config.desc,
-      message: createWeixinMessage(config.version, raw.subPackageInfo),
+      message: createWeixinMessage(config.version, raw.subPackageInfo, config.desc),
       platform: 'weixin',
       raw,
       version: config.version,
     }
   }
   catch (error) {
-    throw new UploadError('Failed to upload Weixin mini program', error)
+    throw new UploadError('微信小程序上传失败', error)
   }
 }
 
-function createWeixinMessage(version: string, packages?: WeixinSubPackageInfo[]): string {
+function createWeixinMessage(version: string, packages?: WeixinSubPackageInfo[], desc?: string): string {
   if (!packages?.length)
-    return `Uploaded Weixin mini program ${version}`
+    return appendDesc(`微信小程序上传成功，版本：${version}`, desc)
 
   const fullPackage = packages.find(item => item.name === '__FULL__')
   const appPackage = packages.find(item => item.name === '__APP__')
-  const parts = [`Uploaded Weixin mini program ${version}`]
+  const parts = [`微信小程序上传成功，版本：${version}`]
 
   if (fullPackage)
-    parts.push(`full package ${Math.round(fullPackage.size / 1024)}KB`)
+    parts.push(`总代码包：${Math.round(fullPackage.size / 1024)}KB`)
   if (appPackage)
-    parts.push(`main package ${Math.round(appPackage.size / 1024)}KB`)
+    parts.push(`主包：${Math.round(appPackage.size / 1024)}KB`)
 
-  return parts.join(', ')
+  return appendDesc(parts.join('，'), desc)
 }

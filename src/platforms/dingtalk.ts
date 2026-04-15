@@ -2,6 +2,7 @@ import type { CIConfig, PlatformUploadResult, UploadContext } from '../types'
 import process from 'node:process'
 import { sdk as opensdk } from 'dingtalk-miniapp-opensdk'
 import { UploadError } from '../errors'
+import { appendDesc } from '../messages'
 import { resolveFromCwd } from '../utils/path'
 
 interface DingTalkUploadProgress {
@@ -18,9 +19,9 @@ interface DingTalkUploadRawResult {
 
 export async function uploadDingTalk(config: CIConfig, options: UploadContext = {}): Promise<PlatformUploadResult<DingTalkUploadRawResult>> {
   if (!config.dingtalk)
-    throw new UploadError('Missing dingtalk config')
+    throw new UploadError('缺少钉钉小程序上传配置（dingtalk）')
   if (!config.dingtalk.autoincrement && !config.version)
-    throw new UploadError('A version is required when DingTalk autoincrement is disabled')
+    throw new UploadError('钉钉小程序关闭自动递增时必须提供 version')
 
   const cwd = options.cwd ?? process.cwd()
   const projectPath = resolveFromCwd(cwd, config.dingtalk.projectPath)
@@ -39,7 +40,7 @@ export async function uploadDingTalk(config: CIConfig, options: UploadContext = 
       onProgressUpdate: (progress: DingTalkUploadProgress) => {
         progressVersion = progress.data?.version ?? progressVersion
         if (progress.status === 'failed')
-          throw new UploadError(progress.data?.log ?? 'DingTalk build failed')
+          throw new UploadError(progress.data?.log ?? '钉钉小程序构建失败')
       },
       packageVersion: config.dingtalk.autoincrement ? '' : config.version,
       project: projectPath,
@@ -49,7 +50,7 @@ export async function uploadDingTalk(config: CIConfig, options: UploadContext = 
 
     return {
       desc: config.desc,
-      message: `Uploaded DingTalk mini program ${version}`,
+      message: appendDesc(`钉钉小程序上传成功，版本：${version}`, config.desc),
       platform: 'dingtalk',
       raw,
       version,
@@ -58,6 +59,6 @@ export async function uploadDingTalk(config: CIConfig, options: UploadContext = 
   catch (error) {
     if (error instanceof UploadError)
       throw error
-    throw new UploadError('Failed to upload DingTalk mini program', error)
+    throw new UploadError('钉钉小程序上传失败', error)
   }
 }
