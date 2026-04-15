@@ -1,6 +1,24 @@
 import type { AlipayClientType } from '../src'
 import { defineConfig } from '../src'
 
+function resolveOptionalString(value?: string): string | undefined {
+  if (value == null)
+    return undefined
+
+  const trimmed = value.trim()
+  return trimmed === '' ? undefined : trimmed
+}
+
+function resolvePlaygroundPath(value: string | undefined, fallback: string): string {
+  const resolved = resolveOptionalString(value)
+  if (!resolved)
+    return fallback
+
+  return resolved.startsWith('playground/')
+    ? resolved.slice('playground/'.length)
+    : resolved
+}
+
 function resolveWeixinRobot(value?: string): number {
   const parsed = Number.parseInt(value ?? '1', 10)
   return Number.isNaN(parsed) ? 1 : parsed
@@ -13,7 +31,7 @@ function resolveBoolean(value?: string): boolean | undefined {
 }
 
 function resolveAlipayClientType(value?: string): AlipayClientType {
-  return (value ?? 'alipay') as AlipayClientType
+  return (resolveOptionalString(value) ?? 'alipay') as AlipayClientType
 }
 
 function createAlipayConfig(env: NodeJS.ProcessEnv) {
@@ -23,22 +41,23 @@ function createAlipayConfig(env: NodeJS.ProcessEnv) {
   const baseConfig = {
     appid: env.ALIPAY_APPID,
     toolId: env.ALIPAY_TOOL_ID,
-    projectPath: env.ALIPAY_PROJECT_PATH ?? 'dist/build/mp-alipay',
+    projectPath: resolvePlaygroundPath(env.ALIPAY_PROJECT_PATH, 'dist/build/mp-alipay'),
     clientType: resolveAlipayClientType(env.ALIPAY_CLIENT_TYPE),
     autoincrement: resolveBoolean(env.ALIPAY_AUTOINCREMENT) ?? true,
   }
 
-  if (env.ALIPAY_PRIVATE_KEY) {
+  const alipayPrivateKey = resolveOptionalString(env.ALIPAY_PRIVATE_KEY)
+  if (alipayPrivateKey) {
     return {
       ...baseConfig,
-      privateKey: env.ALIPAY_PRIVATE_KEY,
+      privateKey: alipayPrivateKey,
     }
   }
 
-  if (env.ALIPAY_PRIVATE_KEY_PATH) {
+  if (resolveOptionalString(env.ALIPAY_PRIVATE_KEY_PATH)) {
     return {
       ...baseConfig,
-      privateKeyPath: env.ALIPAY_PRIVATE_KEY_PATH,
+      privateKeyPath: resolvePlaygroundPath(env.ALIPAY_PRIVATE_KEY_PATH, 'keys/alipay.private.key'),
     }
   }
 
@@ -46,13 +65,13 @@ function createAlipayConfig(env: NodeJS.ProcessEnv) {
 }
 
 export default defineConfig(({ env, packageJson }) => ({
-  version: env.MINICI_VERSION ?? packageJson?.version,
-  desc: env.MINICI_DESC ?? packageJson?.description,
+  version: resolveOptionalString(env.MINICI_VERSION) ?? packageJson?.version,
+  desc: resolveOptionalString(env.MINICI_DESC) ?? packageJson?.description,
   weixin: env.WEIXIN_APPID
     ? {
         appid: env.WEIXIN_APPID,
-        privateKeyPath: env.WEIXIN_PRIVATE_KEY_PATH ?? 'keys/weixin.private.key',
-        projectPath: env.WEIXIN_PROJECT_PATH ?? 'dist/build/mp-weixin',
+        privateKeyPath: resolvePlaygroundPath(env.WEIXIN_PRIVATE_KEY_PATH, 'keys/weixin.private.key'),
+        projectPath: resolvePlaygroundPath(env.WEIXIN_PROJECT_PATH, 'dist/build/mp-weixin'),
         robot: resolveWeixinRobot(env.WEIXIN_ROBOT),
         setting: {
           useProjectConfig: true,
@@ -64,7 +83,7 @@ export default defineConfig(({ env, packageJson }) => ({
     ? {
         appid: env.DINGTALK_APPID,
         token: env.DINGTALK_TOKEN,
-        projectPath: env.DINGTALK_PROJECT_PATH ?? 'dist/build/mp-alipay',
+        projectPath: resolvePlaygroundPath(env.DINGTALK_PROJECT_PATH, 'dist/build/mp-alipay'),
         autoincrement: resolveBoolean(env.DINGTALK_AUTOINCREMENT) ?? true,
       }
     : undefined,

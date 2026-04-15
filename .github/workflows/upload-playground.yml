@@ -29,7 +29,7 @@ jobs:
       MINICI_VERSION: ${{ inputs.version }}
       MINICI_DESC: ${{ inputs.desc }}
       WEIXIN_APPID: ${{ secrets.WEIXIN_APPID }}
-      WEIXIN_PRIVATE_KEY_PATH: playground/keys/weixin.private.key
+      WEIXIN_PRIVATE_KEY_PATH: keys/weixin.private.key
       WEIXIN_PROJECT_PATH: dist/build/mp-weixin
       WEIXIN_ROBOT: ${{ secrets.WEIXIN_ROBOT }}
       ALIPAY_APPID: ${{ secrets.ALIPAY_APPID }}
