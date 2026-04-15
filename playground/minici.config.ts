@@ -31,7 +31,7 @@ function createAlipayConfig(env: NodeJS.ProcessEnv) {
   if (env.ALIPAY_PRIVATE_KEY) {
     return {
       ...baseConfig,
-      privateKey: env.ALIPAY_PRIVATE_KEY.replace(/\\n/g, '\n'),
+      privateKey: env.ALIPAY_PRIVATE_KEY,
     }
   }
 
@@ -64,7 +64,7 @@ export default defineConfig(({ env, packageJson }) => ({
     ? {
         appid: env.DINGTALK_APPID,
         token: env.DINGTALK_TOKEN,
-        projectPath: env.DINGTALK_PROJECT_PATH ?? 'dist/build/mp-dingtalk',
+        projectPath: env.DINGTALK_PROJECT_PATH ?? 'dist/build/mp-alipay',
         autoincrement: resolveBoolean(env.DINGTALK_AUTOINCREMENT) ?? true,
       }
     : undefined,
