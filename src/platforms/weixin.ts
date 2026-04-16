@@ -15,6 +15,31 @@ interface WeixinUploadRawResult {
   subPackageInfo?: WeixinSubPackageInfo[]
 }
 
+type WeixinCIProjectConstructor = typeof ci.Project
+type WeixinCIUpload = typeof ci.upload
+
+interface WeixinCIModule {
+  Project?: WeixinCIProjectConstructor
+  upload?: WeixinCIUpload
+  default?: {
+    Project?: WeixinCIProjectConstructor
+    upload?: WeixinCIUpload
+  }
+}
+
+function resolveWeixinCI(module: WeixinCIModule): {
+  Project: WeixinCIProjectConstructor
+  upload: WeixinCIUpload
+} {
+  const Project = module.Project ?? module.default?.Project
+  const upload = module.upload ?? module.default?.upload
+
+  if (typeof Project !== 'function' || typeof upload !== 'function')
+    throw new TypeError('miniprogram-ci 导出格式不受支持')
+
+  return { Project, upload }
+}
+
 export async function uploadWeixin(config: CIConfig, options: UploadContext = {}): Promise<PlatformUploadResult<WeixinUploadRawResult>> {
   if (!config.weixin)
     throw new UploadError('缺少微信小程序上传配置（weixin）')
@@ -33,14 +58,15 @@ export async function uploadWeixin(config: CIConfig, options: UploadContext = {}
   }
 
   try {
-    const project = new ci.Project({
+    const { Project, upload } = resolveWeixinCI(ci)
+    const project = new Project({
       appid: config.weixin.appid,
       ignores: config.weixin.ignores,
       privateKeyPath,
       projectPath,
       type: config.weixin.type ?? 'miniProgram',
     })
-    const raw = await ci.upload({
+    const raw = await upload({
       desc: config.desc,
       onProgressUpdate: undefined,
       project,

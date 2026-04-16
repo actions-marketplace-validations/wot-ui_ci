@@ -18,6 +18,10 @@ const dingTalkSetConfig = vi.fn()
 vi.mock('miniprogram-ci', () => ({
   Project: WeixinProject,
   upload: weixinUpload,
+  default: {
+    Project: WeixinProject,
+    upload: weixinUpload,
+  },
 }))
 
 vi.mock('minidev', () => ({
