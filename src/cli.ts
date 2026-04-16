@@ -1,8 +1,5 @@
-#!/usr/bin/env node
-
 import type { PlatformName } from './types'
 import process from 'node:process'
-import { fileURLToPath } from 'node:url'
 import { loadConfig } from './config'
 import { ConfigError, formatErrorReport, formatErrorStack, UploadError } from './errors'
 import { createCliLogger } from './logger'
@@ -111,12 +108,6 @@ function normalizePlatform(platform: ParsedCliArgs['platform']): PlatformName {
   if (platform === 'weixin' || platform === 'alipay' || platform === 'dingtalk')
     return platform
   throw new ConfigError(`不支持的平台：${platform ?? 'unknown'}`)
-}
-
-if (process.argv[1] && fileURLToPath(import.meta.url) === process.argv[1]) {
-  runCli().then((exitCode) => {
-    process.exitCode = exitCode
-  })
 }
 
 function logError(

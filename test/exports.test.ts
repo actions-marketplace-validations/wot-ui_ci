@@ -29,6 +29,6 @@ describe('package exports', () => {
     })
     expect(packageJson.main).toBe('./dist/index.mjs')
     expect(packageJson.types).toBe('./dist/index.d.mts')
-    expect(packageJson.bin?.wotci).toBe('./dist/cli.mjs')
+    expect(packageJson.bin?.wotci).toBe('./dist/bin.mjs')
   })
 })
