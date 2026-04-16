@@ -24,6 +24,7 @@ describe('package exports', () => {
 
     expect(packageJson.exports).toEqual({
       '.': './dist/index.mjs',
+      './bin': './dist/bin.mjs',
       './cli': './dist/cli.mjs',
       './package.json': './package.json',
     })
