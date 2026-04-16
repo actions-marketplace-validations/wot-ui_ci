@@ -26,8 +26,8 @@ jobs:
     permissions:
       contents: read
     env:
-      MINICI_VERSION: ${{ inputs.version }}
-      MINICI_DESC: ${{ inputs.desc }}
+      WOTCI_VERSION: ${{ inputs.version }}
+      WOTCI_DESC: ${{ inputs.desc }}
       WEIXIN_APPID: ${{ secrets.WEIXIN_APPID }}
       WEIXIN_PRIVATE_KEY_PATH: keys/weixin.private.key
       WEIXIN_PROJECT_PATH: dist/build/mp-weixin

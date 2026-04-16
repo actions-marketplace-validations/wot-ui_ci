@@ -6,8 +6,8 @@
 
 - 使用 tsdown 打包，输出 ESM 与类型声明
 - 使用 vitest 覆盖配置加载、版本比较与上传参数组装
-- 支持 minici.config.js / .mjs / .cjs / .ts / .mts / .cts 配置文件
-- 提供轻量 CLI 包装层，可直接使用 minici 触发上传
+- 支持 wotci.config.js / .mjs / .cjs / .ts / .mts / .cts 配置文件
+- 提供轻量 CLI 包装层，可直接使用 wotci 触发上传
 - JS 配置支持读取 process.env，不必把密钥或版本号写死在 JSON 中
 - 微信上传链路升级到 miniprogram-ci v2
 
@@ -24,7 +24,7 @@ pnpm add -D @wot-ui/ci
 
 ### 全局安装（可选）
 
-全局安装后可直接使用 `minici` 命令：
+全局安装后可直接使用 `wotci` 命令：
 
 ```sh
 pnpm add -g @wot-ui/ci
@@ -36,14 +36,14 @@ pnpm add -g @wot-ui/ci
 
 ## 快速开始（CLI）
 
-在项目根目录准备配置文件（推荐 `minici.config.ts/js`），然后执行：
+在项目根目录准备配置文件（推荐 `wotci.config.ts/js`），然后执行：
 
 ```sh
 # 直接运行（node_modules/.bin）
-pnpm exec minici --platform weixin
+pnpm exec wotci --platform weixin
 
 # 或
-npx minici --platform weixin
+npx wotci --platform weixin
 ```
 
 也可以把上传命令写进 `package.json`：
@@ -51,9 +51,9 @@ npx minici --platform weixin
 ```json
 {
   "scripts": {
-    "upload:weixin": "minici -p weixin",
-    "upload:alipay": "minici -p alipay",
-    "upload:dingtalk": "minici -p dingtalk"
+    "upload:weixin": "wotci -p weixin",
+    "upload:alipay": "wotci -p alipay",
+    "upload:dingtalk": "wotci -p dingtalk"
   }
 }
 ```
@@ -66,9 +66,9 @@ https://docs.npmjs.com/cli/v9/commands/npm-run-script
 ```json
 {
   "scripts": {
-    "upload:mp-weixin": "uni build -p mp-weixin && minici -p weixin",
-    "upload:mp-alipay": "uni build -p mp-alipay && minici -p alipay",
-    "upload:mp-dingtalk": "uni build -p mp-dingtalk && minici -p dingtalk"
+    "upload:mp-weixin": "uni build -p mp-weixin && wotci -p weixin",
+    "upload:mp-alipay": "uni build -p mp-alipay && wotci -p alipay",
+    "upload:mp-dingtalk": "uni build -p mp-dingtalk && wotci -p dingtalk"
   }
 }
 ```
@@ -76,9 +76,9 @@ https://docs.npmjs.com/cli/v9/commands/npm-run-script
 ### CLI 参数
 
 ```sh
-minici --platform weixin
-minici --platform alipay --config ./minici.config.mjs
-minici --platform dd
+wotci --platform weixin
+wotci --platform alipay --config ./wotci.config.mjs
+wotci --platform dd
 ```
 
 - --platform 或 -p：目标平台，支持 weixin、alipay、dingtalk、dd（dd 会归一到 dingtalk）
@@ -92,17 +92,16 @@ minici --platform dd
 
 1. 显式传入的 config
 2. --config 指定的配置文件
-3. minici.config.js
-4. minici.config.mjs
-5. minici.config.cjs
-6. minici.config.ts
-7. minici.config.mts
-8. minici.config.cts
-9. .minicirc（JSON5）
-10. package.json 中的 minici 字段
-11. package.json 中的 version 和 description 默认值
+3. wotci.config.js
+4. wotci.config.mjs
+5. wotci.config.cjs
+6. wotci.config.ts
+7. wotci.config.mts
+8. wotci.config.cts
+9. package.json 中的 wotci 字段
+10. package.json 中的 version 和 description 默认值
 
-为了兼容旧项目，.minicirc 和 package.json 中历史上使用的 dd 字段仍然可用，加载后会自动归一为 dingtalk 配置。
+为了兼容旧项目，配置中历史上使用的 dd 字段仍然可用，加载后会自动归一为 dingtalk 配置。
 
 ### 配置字段
 
@@ -198,8 +197,8 @@ minici --platform dd
 import { defineConfig } from '@wot-ui/ci'
 
 export default defineConfig(({ env }) => ({
-  version: env.MINICI_VERSION,
-  desc: env.MINICI_DESC,
+  version: env.WOTCI_VERSION,
+  desc: env.WOTCI_DESC,
   weixin: {
     appid: env.WEIXIN_APPID!,
     projectPath: env.WEIXIN_PROJECT_PATH || 'dist/build/mp-weixin',
@@ -233,8 +232,8 @@ export default defineConfig(({ env }) => ({
 import { defineConfig } from '@wot-ui/ci'
 
 export default defineConfig(({ env }) => ({
-  version: env.MINICI_VERSION,
-  desc: env.MINICI_DESC,
+  version: env.WOTCI_VERSION,
+  desc: env.WOTCI_DESC,
   weixin: {
     appid: env.WEIXIN_APPID,
     projectPath: env.WEIXIN_PROJECT_PATH || 'dist/build/mp-weixin',
@@ -262,31 +261,12 @@ export default defineConfig(({ env }) => ({
 }))
 ```
 
-### .minicirc 示例（JSON5）
-
-```json
-{
-  "dd": {
-    "appid": "legacy-dd-appid",
-    "token": "legacy-token",
-    "projectPath": "dist/build/mp-dingtalk"
-  },
-  "weixin": {
-    "appid": "wx123",
-    "privateKeyPath": "keys/private.key",
-    "projectPath": "dist/build/mp-weixin"
-  },
-  "version": "1.0.0",
-  "desc": "release"
-}
-```
-
 ## Playground 示例
 
-playground 中的 [playground/minici.config.ts](playground/minici.config.ts) 已经预留了微信、支付宝、钉钉三端配置，统一通过环境变量注入：
+playground 中的 [playground/wotci.config.ts](playground/wotci.config.ts) 已经预留了微信、支付宝、钉钉三端配置，统一通过环境变量注入：
 
-- `MINICI_VERSION`：上传版本号，未传时回退到 playground 的 package.json version
-- `MINICI_DESC`：上传描述，未传时回退到 playground 的 package.json description
+- `WOTCI_VERSION`：上传版本号，未传时回退到 playground 的 package.json version
+- `WOTCI_DESC`：上传描述，未传时回退到 playground 的 package.json description
 - `WEIXIN_APPID`
 - `WEIXIN_PRIVATE_KEY_PATH`
 - `WEIXIN_PROJECT_PATH`
@@ -305,7 +285,7 @@ playground 中的 [playground/minici.config.ts](playground/minici.config.ts) 已
 本地示例命令：
 
 ```sh
-MINICI_VERSION=1.0.0 pnpm upload:playground:weixin
+WOTCI_VERSION=1.0.0 pnpm upload:playground:weixin
 ALIPAY_PRIVATE_KEY="$(cat keys/alipay.private.key)" pnpm upload:playground:alipay
 DINGTALK_APPID=xxx DINGTALK_TOKEN=xxx pnpm upload:playground:dingtalk
 ```
@@ -344,15 +324,15 @@ DINGTALK_APPID=xxx DINGTALK_TOKEN=xxx pnpm upload:playground:dingtalk
 - uploadDingTalk
 - uploadPlatform
 - compareVersion
-- default: minici
+- default: wotci
 
 ### 用法
 
 ```ts
-import minici, { loadConfig } from '@wot-ui/ci'
+import wotci, { loadConfig } from '@wot-ui/ci'
 
 const loaded = await loadConfig()
-const result = await minici.uploadPlatform('weixin', loaded.config, { cwd: loaded.cwd })
+const result = await wotci.uploadPlatform('weixin', loaded.config, { cwd: loaded.cwd })
 
 console.log(result.version)
 console.log(result.message)

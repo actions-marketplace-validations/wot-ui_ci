@@ -5,8 +5,8 @@ import {
 } from './config'
 import {
   ConfigError,
-  UniMiniCIError,
   UploadError,
+  WotCIError,
 } from './errors'
 import {
   uploadAlipay,
@@ -31,8 +31,8 @@ export {
 }
 export {
   ConfigError,
-  UniMiniCIError,
   UploadError,
+  WotCIError,
 }
 export {
   uploadAlipay,
@@ -71,10 +71,10 @@ export {
   compareVersion,
 }
 
-const minici = {
+const wotci = {
   CONFIG_FILE_NAMES,
   ConfigError,
-  UniMiniCIError,
+  WotCIError,
   UploadError,
   compareVersion,
   defineConfig,
@@ -85,4 +85,4 @@ const minici = {
   uploadWeixin,
 }
 
-export default minici
+export default wotci

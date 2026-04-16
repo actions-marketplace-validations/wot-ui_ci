@@ -10,8 +10,7 @@ const configSourceLabelMap: Record<ConfigSource, string> = {
   'defaults': '默认配置',
   'inline': '内联配置',
   'js': 'JS/TS 配置文件',
-  'minicirc': '.minicirc 配置文件',
-  'package-json': 'package.json 中的 minici 字段',
+  'package-json': 'package.json 中的 wotci 字段',
 }
 
 export function getPlatformLabel(platform: PlatformName): string {
@@ -35,7 +34,7 @@ export function createCliUploadStartMessage(platform: PlatformName): string {
 
 export function createCliHelpText(): string {
   return [
-    '用法：minici --platform <weixin|alipay|dingtalk|dd> [options]',
+    '用法：wotci --platform <weixin|alipay|dingtalk|dd> [options]',
     '',
     '参数：',
     '  -p, --platform <name>  目标平台',

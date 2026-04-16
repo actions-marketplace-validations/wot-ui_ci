@@ -79,14 +79,13 @@ export interface CIConfig {
   desc?: string
   weixin?: WeixinConfig
   alipay?: AlipayConfig
-  /** @deprecated Use dingtalk instead. Kept for legacy .minicirc compatibility. */
   dd?: DingtalkConfig
   dingtalk?: DingtalkConfig
 }
 
 export interface PackageJsonConfig {
   description?: string
-  minici?: CIConfig
+  wotci?: CIConfig
   version?: string
 }
 
@@ -102,7 +101,7 @@ export type ConfigFactory = (context: ConfigFactoryContext) => MaybePromise<CICo
 
 export type UserConfig = CIConfig | ConfigFactory
 
-export type ConfigSource = 'inline' | 'js' | 'minicirc' | 'package-json' | 'defaults'
+export type ConfigSource = 'inline' | 'js' | 'package-json' | 'defaults'
 
 export interface LoadConfigOptions {
   cwd?: string

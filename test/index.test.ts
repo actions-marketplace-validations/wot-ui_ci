@@ -37,8 +37,8 @@ vi.mock('dingtalk-miniapp-opensdk', () => ({
   },
 }))
 
-const miniciModule = await import('../src')
-const { default: minici, compareVersion, defineConfig, loadConfig, uploadAlipay, uploadDingTalk, uploadPlatform, uploadWeixin } = miniciModule
+const wotciModule = await import('../src')
+const { default: wotci, compareVersion, defineConfig, loadConfig, uploadAlipay, uploadDingTalk, uploadPlatform, uploadWeixin } = wotciModule
 const { parseCliArgs, runCli } = await import('../src/cli')
 const { formatErrorStack, UploadError, formatErrorReport } = await import('../src/errors')
 const { createCliLogger } = await import('../src/logger')
@@ -47,7 +47,7 @@ const { appendDesc, createCliConfigLoadedMessage, createCliHelpText, createCliUp
 let tempRoot = ''
 
 beforeEach(async () => {
-  tempRoot = await mkdtemp(path.join(os.tmpdir(), 'minici-'))
+  tempRoot = await mkdtemp(path.join(os.tmpdir(), 'wotci-'))
   await writeFile(path.join(tempRoot, 'package.json'), JSON.stringify({
     description: 'package description',
     version: '0.0.5',
@@ -78,7 +78,7 @@ describe('config loading', () => {
 
   it('loads JS config and resolves env-based values', async () => {
     process.env.UNI_MINI_CI_VERSION = '2.0.0'
-    await writeFile(path.join(tempRoot, 'minici.config.js'), [
+    await writeFile(path.join(tempRoot, 'wotci.config.js'), [
       'export default ({ env }) => ({',
       '  version: env.UNI_MINI_CI_VERSION,',
       '  weixin: {',
@@ -98,7 +98,7 @@ describe('config loading', () => {
   })
 
   it('loads TS config files discovered by default search', async () => {
-    await writeFile(path.join(tempRoot, 'minici.config.ts'), [
+    await writeFile(path.join(tempRoot, 'wotci.config.ts'), [
       'export default {',
       '  version: "2.1.0",',
       '  weixin: {',
@@ -112,15 +112,15 @@ describe('config loading', () => {
     const loaded = await loadConfig({ cwd: tempRoot })
 
     expect(loaded.source).toBe('js')
-    expect(loaded.sourceFile).toBe(path.join(tempRoot, 'minici.config.ts'))
+    expect(loaded.sourceFile).toBe(path.join(tempRoot, 'wotci.config.ts'))
     expect(loaded.cwd).toBe(tempRoot)
   })
 
   it('supports explicit CommonJS config modules', async () => {
-    await writeFile(path.join(tempRoot, 'minici.config.cjs'), 'module.exports = { version: "3.0.0" }\n')
+    await writeFile(path.join(tempRoot, 'wotci.config.cjs'), 'module.exports = { version: "3.0.0" }\n')
 
     const loaded = await loadConfig({
-      configFile: 'minici.config.cjs',
+      configFile: 'wotci.config.cjs',
       cwd: tempRoot,
     })
 
@@ -130,7 +130,7 @@ describe('config loading', () => {
 
   it('falls back to package config when no config file exists', async () => {
     await writeFile(path.join(tempRoot, 'package.json'), JSON.stringify({
-      minici: {
+      wotci: {
         version: '4.0.0',
       },
       description: 'package description',
@@ -142,23 +142,6 @@ describe('config loading', () => {
     expect(loaded.source).toBe('package-json')
     expect(loaded.config.version).toBe('4.0.0')
     expect(loaded.config.desc).toBe('package description')
-  })
-
-  it('normalizes legacy dd config from .minicirc', async () => {
-    await writeFile(path.join(tempRoot, '.minicirc'), JSON.stringify({
-      dd: {
-        appid: 'dd-legacy',
-        projectPath: 'dist/legacy-dd',
-        token: 'token',
-      },
-      version: '5.0.0',
-    }, null, 2))
-
-    const loaded = await loadConfig({ cwd: tempRoot })
-
-    expect(loaded.source).toBe('minicirc')
-    expect(loaded.config.dingtalk?.appid).toBe('dd-legacy')
-    expect(loaded.config.dd).toBeUndefined()
   })
 
   it('keeps defineConfig identity', () => {
@@ -177,10 +160,10 @@ describe('config loading', () => {
 
 describe('version comparison', () => {
   it('supports default import style', () => {
-    expect(minici.loadConfig).toBe(loadConfig)
-    expect(minici.uploadPlatform).toBe(uploadPlatform)
-    expect(minici.defineConfig).toBe(defineConfig)
-    expect(minici.compareVersion).toBe(compareVersion)
+    expect(wotci.loadConfig).toBe(loadConfig)
+    expect(wotci.uploadPlatform).toBe(uploadPlatform)
+    expect(wotci.defineConfig).toBe(defineConfig)
+    expect(wotci.compareVersion).toBe(compareVersion)
   })
 
   it('compares dot separated versions', () => {
@@ -327,36 +310,6 @@ describe('cli', () => {
 
   it('rejects unknown arguments', () => {
     expect(() => parseCliArgs(['--unknown'])).toThrow('未知参数：--unknown')
-  })
-
-  it('loads legacy .minicirc and uploads via dd alias', async () => {
-    const stdout: string[] = []
-    const stderr: string[] = []
-
-    await writeFile(path.join(tempRoot, '.minicirc'), JSON.stringify({
-      dd: {
-        appid: 'dd-legacy',
-        projectPath: 'dist/legacy-dd',
-        token: 'token',
-      },
-      version: '6.0.0',
-    }, null, 2))
-
-    const exitCode = await runCli(['--platform', 'dd', '--cwd', tempRoot], {
-      stderr: message => stderr.push(message),
-      stdout: message => stdout.push(message),
-    })
-
-    expect(exitCode).toBe(0)
-    expect(stderr).toEqual([])
-    expect(stdout).toContain(`[信息] 配置加载完成，来源：.minicirc 配置文件（${path.join(tempRoot, '.minicirc')}）`)
-    expect(stdout).toContain('[开始] 开始上传钉钉小程序...')
-    expect(stdout.some(line => line.includes('[成功] 钉钉小程序上传成功，版本：1.0.2'))).toBe(true)
-    expect(dingTalkMiniUpload).toHaveBeenCalledWith(expect.objectContaining({
-      miniAppId: 'dd-legacy',
-      packageVersion: '6.0.0',
-      project: path.join(tempRoot, 'dist/legacy-dd'),
-    }))
   })
 
   it('prints nested cause messages for expected errors', async () => {

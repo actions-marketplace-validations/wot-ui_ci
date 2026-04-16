@@ -3,22 +3,20 @@ import { readFile } from 'node:fs/promises'
 import path from 'node:path'
 import process from 'node:process'
 import { pathToFileURL } from 'node:url'
-import JSON5 from 'json5'
 import { tsImport } from 'tsx/esm/api'
 import { ConfigError } from './errors'
 import { exists, resolveFromCwd } from './utils/path'
 
-const PACKAGE_CONFIG_KEY = 'minici'
+const PACKAGE_CONFIG_KEY = 'wotci'
 const TYPESCRIPT_CONFIG_EXTENSIONS = new Set(['.ts', '.mts', '.cts'])
 
 export const CONFIG_FILE_NAMES = [
-  'minici.config.js',
-  'minici.config.mjs',
-  'minici.config.cjs',
-  'minici.config.ts',
-  'minici.config.mts',
-  'minici.config.cts',
-  '.minicirc',
+  'wotci.config.js',
+  'wotci.config.mjs',
+  'wotci.config.cjs',
+  'wotci.config.ts',
+  'wotci.config.mts',
+  'wotci.config.cts',
 ] as const
 
 export function defineConfig(config: CIConfig): CIConfig
@@ -50,13 +48,9 @@ export async function loadConfig(options: LoadConfigOptions = {}): Promise<Loade
     return loadConfigFromFile(filePath, context, packageJson)
   }
 
-  const jsConfigFile = await findExistingConfigFile(cwd, CONFIG_FILE_NAMES.slice(0, 6))
+  const jsConfigFile = await findExistingConfigFile(cwd, CONFIG_FILE_NAMES)
   if (jsConfigFile)
     return loadConfigFromFile(jsConfigFile, context, packageJson)
-
-  const minicircPath = resolveFromCwd(cwd, '.minicirc')
-  if (await exists(minicircPath))
-    return loadConfigFromFile(minicircPath, context, packageJson)
 
   const packageConfig = packageJson?.[PACKAGE_CONFIG_KEY]
   if (packageConfig && isConfigObject(packageConfig)) {
@@ -77,16 +71,13 @@ export async function loadConfig(options: LoadConfigOptions = {}): Promise<Loade
 }
 
 async function loadConfigFromFile(filePath: string, context: ConfigFactoryContext, packageJson?: PackageJsonConfig): Promise<LoadedConfig> {
-  const source = filePath.endsWith('.minicirc') ? 'minicirc' : 'js'
-  const config = source === 'minicirc'
-    ? await loadMinicirc(filePath)
-    : await loadModuleConfig(filePath, context)
+  const config = await loadModuleConfig(filePath, context)
 
   return {
     config: withPackageDefaults(config, packageJson),
     cwd: context.cwd,
     packageJson,
-    source,
+    source: 'js',
     sourceFile: filePath,
   }
 }
@@ -113,21 +104,6 @@ async function findExistingConfigFile(cwd: string, names: readonly string[]): Pr
   }
 
   return undefined
-}
-
-async function loadMinicirc(filePath: string): Promise<CIConfig> {
-  try {
-    const source = await readFile(filePath, 'utf8')
-    const parsed = JSON5.parse(source) as unknown
-    if (!isConfigObject(parsed))
-      throw new ConfigError(`配置文件必须导出对象：${filePath}`)
-    return parsed
-  }
-  catch (error) {
-    if (error instanceof ConfigError)
-      throw error
-    throw new ConfigError(`解析配置文件失败：${filePath}`, error)
-  }
 }
 
 async function loadModuleConfig(filePath: string, context: ConfigFactoryContext): Promise<CIConfig> {

@@ -11,7 +11,7 @@ interface CliLogger {
 
 export function createCliLogger(options: Pick<RunCliOptions, 'stderr' | 'stdout'> = {}): CliLogger {
   if (!options.stdout && !options.stderr)
-    return createConsola().withTag('minici')
+    return createConsola().withTag('wotci')
 
   return {
     error: (...args: unknown[]) => write(options.stderr, `[失败] ${formatArgs(args)}`),

@@ -30,8 +30,8 @@ function resolveBoolean(value?: string): boolean | undefined {
 }
 
 export default defineConfig(({ env, packageJson }) => ({
-  version: resolveOptionalString(env.MINICI_VERSION) ?? packageJson?.version,
-  desc: resolveOptionalString(env.MINICI_DESC) ?? packageJson?.description,
+  version: resolveOptionalString(env.WOTCI_VERSION) ?? packageJson?.version,
+  desc: resolveOptionalString(env.WOTCI_DESC) ?? packageJson?.description,
   weixin: env.WEIXIN_APPID
     ? {
         appid: env.WEIXIN_APPID,
