@@ -9,16 +9,17 @@ import type {
   WotciConfig,
 } from './types'
 import { readFile } from 'node:fs/promises'
+import { createRequire } from 'node:module'
 import path from 'node:path'
 import process from 'node:process'
 import { pathToFileURL } from 'node:url'
 import JSON5 from 'json5'
-import { require as tsxRequire } from 'tsx/cjs/api'
 import { tsImport } from 'tsx/esm/api'
 import { ConfigError } from './errors'
 import { isPlainObject, unwrapModuleExport } from './utils/module'
 import { exists, resolveFromCwd } from './utils/path'
 
+const requireFromHere = createRequire(import.meta.url)
 const PACKAGE_CONFIG_KEY = 'wotci'
 const LEGACY_PACKAGE_CONFIG_KEY = 'uni-mini-ci'
 const TYPESCRIPT_CONFIG_EXTENSIONS = new Set(['.ts', '.mts', '.cts'])
@@ -169,11 +170,24 @@ async function loadModuleExports(filePath: string): Promise<unknown> {
   const extension = path.extname(filePath)
 
   if (extension === '.cts')
-    return tsxRequire(filePath, import.meta.url)
+    return loadCommonJsTypeScriptModule(filePath)
   if (TYPESCRIPT_CONFIG_EXTENSIONS.has(extension))
     return tsImport(pathToFileURL(filePath).href, import.meta.url)
 
   return import(pathToFileURL(filePath).href)
+}
+
+/**
+ * `.cts` 一律按 CommonJS 处理，交给 tsx 的 CJS API 加载。
+ * 这里通过 createRequire 取运行时，避免 playground 的 TS 4.9 无法解析
+ * `tsx/cjs/api` 的 exports 类型声明。
+ */
+function loadCommonJsTypeScriptModule(filePath: string): unknown {
+  const tsxCjsApi = requireFromHere('tsx/cjs/api') as {
+    require: (id: string, fromFile: string | URL) => unknown
+  }
+
+  return tsxCjsApi.require(filePath, import.meta.url)
 }
 
 async function resolveConfigValue(value: unknown, context: ConfigFactoryContext, label: string): Promise<WotciConfig> {
