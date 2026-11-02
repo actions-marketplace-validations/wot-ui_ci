@@ -2,7 +2,7 @@ import type { IdeAction, PlatformInput } from './types'
 import process from 'node:process'
 import { loadConfig } from './config'
 import { ConfigError, formatErrorReport, formatErrorStack, WotCIError } from './errors'
-import { closeIde, openIde } from './ide'
+import { autoIde, closeIde, getIdeStatus, openIde, previewIde } from './ide'
 import { createCliLogger } from './logger'
 import {
   createCliConfigLoadedMessage,
@@ -21,7 +21,7 @@ export interface RunCliOptions {
   stdout?: (message: string) => void
 }
 
-export type CliCommand = 'upload' | 'preview' | 'open' | 'close'
+export type CliCommand = 'upload' | 'preview' | 'open' | 'close' | 'auto' | 'ide-status' | 'ide-preview'
 
 export interface ParsedCliArgs {
   command?: CliCommand
@@ -31,6 +31,7 @@ export interface ParsedCliArgs {
   dryRun?: boolean
   force?: boolean
   help?: boolean
+  infoOutput?: string
   lang?: 'zh' | 'en'
   page?: string
   pageQuery?: string
@@ -42,9 +43,11 @@ export interface ParsedCliArgs {
   quit?: boolean
   robot?: number
   scene?: string
+  ticket?: string
+  trustProject?: boolean
 }
 
-const CLI_COMMANDS = new Set<CliCommand>(['upload', 'preview', 'open', 'close'])
+const CLI_COMMANDS = new Set<CliCommand>(['upload', 'preview', 'open', 'close', 'auto'])
 
 export async function runCli(argv: string[] = process.argv.slice(2), options: RunCliOptions = {}): Promise<number> {
   const logger = createCliLogger(options)
@@ -71,6 +74,54 @@ export async function runCli(argv: string[] = process.argv.slice(2), options: Ru
     })
 
     logger.info(createCliConfigLoadedMessage(loaded.source, loaded.sourceFile))
+
+    if (command === 'ide-status') {
+      const result = await getIdeStatus(platform, {
+        config: loaded.config,
+        cwd: loaded.cwd,
+        lang: args.lang,
+        port: args.port,
+      })
+
+      logger.log(result.message)
+
+      if (!result.installed)
+        return 1
+
+      return 0
+    }
+
+    if (command === 'auto' || command === 'ide-preview') {
+      logger.start(command === 'auto'
+        ? createCliIdeStartMessage(platform, 'auto')
+        : createCliPreviewStartMessage(platform))
+
+      const result = command === 'auto'
+        ? await autoIde(platform, {
+            config: loaded.config,
+            cwd: loaded.cwd,
+            dryRun: args.dryRun,
+            force: args.force,
+            lang: args.lang,
+            port: args.port,
+            ticket: args.ticket,
+            trustProject: args.trustProject,
+          })
+        : await previewIde(platform, {
+            config: loaded.config,
+            cwd: loaded.cwd,
+            dryRun: args.dryRun,
+            force: args.force,
+            infoOutput: args.infoOutput,
+            lang: args.lang,
+            port: args.port,
+            qrFormat: args.qrFormat,
+            qrOutput: args.qrOutput,
+          })
+
+      logger.success(result.message)
+      return 0
+    }
 
     if (command === 'preview') {
       logger.start(createCliPreviewStartMessage(platform))
@@ -139,11 +190,23 @@ export function parseCliArgs(argv: string[]): ParsedCliArgs {
   const first = argv[0]
 
   if (first && !first.startsWith('-')) {
-    if (!CLI_COMMANDS.has(first as CliCommand))
+    if (first === 'ide') {
+      const subcommand = argv[1]
+      if (subcommand === 'status')
+        parsed.command = 'ide-status'
+      else if (subcommand === 'preview')
+        parsed.command = 'ide-preview'
+      else
+        throw new ConfigError(`未知 ide 子命令：${subcommand ?? '（空）'}`)
+      index = 2
+    }
+    else if (CLI_COMMANDS.has(first as CliCommand)) {
+      parsed.command = first as CliCommand
+      index = 1
+    }
+    else {
       throw new ConfigError(`未知命令：${first}`)
-
-    parsed.command = first as CliCommand
-    index = 1
+    }
   }
 
   for (; index < argv.length; index++) {
@@ -203,6 +266,15 @@ export function parseCliArgs(argv: string[]): ParsedCliArgs {
         break
       case '--robot':
         parsed.robot = readRobot(argv, ++index, current)
+        break
+      case '--info-output':
+        parsed.infoOutput = readOptionValue(argv, ++index, current)
+        break
+      case '--trust-project':
+        parsed.trustProject = true
+        break
+      case '--ticket':
+        parsed.ticket = readOptionValue(argv, ++index, current)
         break
       default:
         throw new ConfigError(`未知参数：${current}`)

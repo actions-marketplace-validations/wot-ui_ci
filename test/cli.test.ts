@@ -317,3 +317,45 @@ describe('预览子命令参数', () => {
     expect(createCliHelpText()).toContain('--qr-format')
   })
 })
+
+describe('iDE status / auto 参数', () => {
+  it('解析 ide status / ide preview', () => {
+    expect(parseCliArgs(['ide', 'status', '-p', 'weixin'])).toEqual({
+      command: 'ide-status',
+      platform: 'weixin',
+    })
+    expect(parseCliArgs(['ide', 'preview', '-p', 'weixin', '--info-output', 'out/info.json'])).toEqual({
+      command: 'ide-preview',
+      infoOutput: 'out/info.json',
+      platform: 'weixin',
+    })
+  })
+
+  it('解析 auto 的 trust-project / ticket', () => {
+    expect(parseCliArgs([
+      'auto',
+      '-p',
+      'weixin',
+      '--trust-project',
+      '--ticket',
+      't-1',
+    ])).toEqual({
+      command: 'auto',
+      platform: 'weixin',
+      ticket: 't-1',
+      trustProject: true,
+    })
+  })
+
+  it('未知 ide 子命令抛出错误', () => {
+    expect(() => parseCliArgs(['ide', 'unknown'])).toThrow('未知 ide 子命令')
+    expect(() => parseCliArgs(['ide'])).toThrow('未知 ide 子命令：（空）')
+  })
+
+  it('帮助信息包含 auto / ide status / ide preview', () => {
+    const help = createCliHelpText()
+    expect(help).toContain('wotci auto')
+    expect(help).toContain('wotci ide status')
+    expect(help).toContain('wotci ide preview')
+  })
+})

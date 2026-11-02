@@ -128,6 +128,15 @@ wotci open -p alipay
 
 wotci close -p weixin
 wotci close -p weixin --quit
+
+# 查询安装与登录状态
+wotci ide status -p weixin
+
+# 开启自动化端口，配合 miniprogram-automator
+wotci auto -p weixin --port 9420 --trust-project
+
+# 使用 IDE 自身 CLI 生成预览二维码
+wotci ide preview -p weixin --qr-output dist/ide-preview.png
 ```
 
 | 参数 | 说明 |
@@ -137,12 +146,17 @@ wotci close -p weixin --quit
 | `--port <number>` | 微信开发者工具 HTTP server 端口 |
 | `--lang <zh 或 en>` | 微信开发者工具语言 |
 | `--quit` | `close` 时退出整个 IDE，而不是只关闭项目 |
+| `--info-output <file>` | `ide preview` 时输出 IDE 的附加信息 |
+| `--trust-project` | `auto` 时信任当前项目 |
+| `--ticket <ticket>` | `auto` 时使用的 ticket |
 
 平台差异：
 
-- **微信**：通过开发者工具自带 CLI 执行 `open` / `close` / `quit`，会自动探测 macOS/Windows/Linux 的常见安装路径；也可以用 `weixin.ide.cliPath` 或环境变量 `WECHAT_DEVTOOLS_CLI` 指定
-- **支付宝**：通过 `minidev.startIde` 打开，`alipay.ide.appPath` 可指定 IDE 安装路径；暂不支持命令行关闭
+- **微信**：通过开发者工具自带 CLI 执行 `open` / `close` / `quit` / `auto` / `preview` / `islogin`，会自动探测 macOS/Windows/Linux 的常见安装路径；也可以用 `weixin.ide.cliPath` 或环境变量 `WECHAT_DEVTOOLS_CLI` 指定
+- **支付宝**：通过 `minidev.startIde` 打开，`alipay.ide.appPath` 可指定 IDE 安装路径；暂不支持命令行关闭、状态查询、自动化与 IDE 预览
 - **钉钉**：`dingtalk-miniapp-opensdk` 未暴露 IDE 能力，会返回明确的不支持错误
+
+`wotci ide status` 通过 `cli islogin` 判断登录状态；如果 IDE 未启动，该命令可能会启动 IDE。`wotci ide preview` 与 `wotci preview` 的区别是：前者走 IDE 自身 CLI、依赖本机登录态，后者走 `miniprogram-ci`、适合 CI。
 
 为避免 CI 卡在 GUI 上，`CI=true` 时 `open` 默认拒绝执行；`--dry-run` 不受此限制。
 
@@ -415,6 +429,27 @@ console.log(result.message)
 // 已在微信开发者工具中打开：/path/to/dist/build/mp-weixin
 
 await closeIde('weixin', { cwd: process.cwd(), quit: true })
+```
+
+状态、自动化与 IDE 预览：
+
+```ts
+import { autoIde, getIdeStatus, previewIde } from '@wot-ui/ci'
+
+const status = await getIdeStatus('weixin', { cwd: process.cwd() })
+console.log(status.installed, status.loggedIn)
+
+await autoIde('weixin', {
+  cwd: process.cwd(),
+  port: 9420,
+  trustProject: true,
+})
+
+const preview = await previewIde('weixin', {
+  cwd: process.cwd(),
+  qrOutput: 'dist/ide-preview.png',
+})
+console.log(preview.qrCode?.value)
 ```
 
 `openIde` 同样会加载 `wotci.config.*`，因此可以用配置里的 `projectPath` 和 `ide.cliPath`；也可以直接传内联配置：

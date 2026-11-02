@@ -40,6 +40,8 @@ export function createCliPreviewStartMessage(platform: Platform): string {
 export function createCliIdeStartMessage(platform: Platform, action: IdeAction): string {
   if (action === 'open')
     return `正在打开${getPlatformLabel(platform)}开发者工具...`
+  if (action === 'auto')
+    return `正在开启${getPlatformLabel(platform)}开发者工具自动化...`
   if (action === 'close')
     return `正在关闭${getPlatformLabel(platform)}项目...`
   return `正在退出${getPlatformLabel(platform)}开发者工具...`
@@ -52,6 +54,9 @@ export function createCliHelpText(): string {
     '  wotci preview --platform <weixin|alipay> [options]',
     '  wotci open   --platform <weixin|alipay> [options]',
     '  wotci close  --platform <weixin|alipay> [options]',
+    '  wotci auto   --platform weixin [options]',
+    '  wotci ide status  --platform weixin [options]',
+    '  wotci ide preview --platform weixin [options]',
     '',
     '参数：',
     '  -p, --platform <name>  目标平台：weixin、alipay、dingtalk（dd 为钉钉别名）',
@@ -70,6 +75,9 @@ export function createCliHelpText(): string {
     '      --scene <value>    预览场景值',
     '      --desc <text>      预览备注',
     '      --robot <1-30>     指定 CI 机器人',
+    '      --info-output <file> IDE 预览信息输出路径',
+    '      --trust-project    auto 时信任当前项目',
+    '      --ticket <ticket>  auto 时使用的 ticket',
     '  -h, --help             查看帮助信息',
   ].join('\n')
 }

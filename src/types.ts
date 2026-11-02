@@ -247,7 +247,7 @@ export interface UploadOptions {
 /** 支持 IDE 操作的平台 */
 export type IdePlatform = Exclude<Platform, 'dingtalk'>
 
-export type IdeAction = 'open' | 'close' | 'quit'
+export type IdeAction = 'open' | 'auto' | 'close' | 'quit'
 
 /** IDE 操作选项 */
 export interface IdeOptions extends UploadOptions {
@@ -261,6 +261,10 @@ export interface IdeOptions extends UploadOptions {
   port?: number
   /** close 时退出整个 IDE，而不是只关闭项目 */
   quit?: boolean
+  /** auto 时信任当前项目 */
+  trustProject?: boolean
+  /** auto 时使用的 ticket */
+  ticket?: string
 }
 
 /** IDE 操作结果 */
@@ -277,6 +281,48 @@ export interface IdeResult {
 }
 
 /** JS 调用入口的 IDE 选项 */
+/** IDE 状态查询结果 */
+export interface IdeStatusResult {
+  platform: IdePlatform
+  /** CLI 是否可用 */
+  installed: boolean
+  /** 探测到的 CLI 路径 */
+  cliPath?: string
+  /** 登录状态，无法判断时为 undefined */
+  loggedIn?: boolean
+  /** IDE 是否在运行，当前仅微信可能返回 */
+  running?: boolean
+  message: string
+  stdout?: string
+}
+
+/** IDE 侧预览选项 */
+export interface IdePreviewOptions extends IdeOptions {
+  /** 二维码格式 */
+  qrFormat?: 'terminal' | 'image' | 'base64'
+  /** 二维码输出路径 */
+  qrOutput?: string
+  /** IDE CLI 的 info-output 路径 */
+  infoOutput?: string
+}
+
+/** IDE 侧预览结果 */
+export interface IdePreviewResult {
+  platform: IdePlatform
+  executed: boolean
+  qrCode?: PreviewQrCode
+  infoPath?: string
+  message: string
+  stdout?: string
+}
+
+export interface IdePreviewRequest extends IdePreviewOptions {
+  /** 内联配置，传入后不再读取配置文件 */
+  config?: UserConfig
+  /** 显式指定的配置文件 */
+  configFile?: string
+}
+
 export interface IdeRequest extends IdeOptions {
   /** 内联配置，传入后不再读取配置文件 */
   config?: UserConfig

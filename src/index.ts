@@ -15,9 +15,9 @@ import {
   UploadError,
   WotCIError,
 } from './errors'
-import { closeIde, openIde } from './ide'
+import { autoIde, closeIde, getIdeStatus, openIde, previewIde } from './ide'
 import { runAlipayIde } from './ide/alipay'
-import { runWeixinIde } from './ide/weixin'
+import { autoWeixinIde, getWeixinIdeStatus, previewWeixinIde, runWeixinIde } from './ide/weixin'
 import { previewAlipay, uploadAlipay } from './platforms/alipay'
 import { uploadDingTalk } from './platforms/dingtalk'
 import { previewWeixin, uploadWeixin } from './platforms/weixin'
@@ -50,8 +50,14 @@ export {
   previewWeixin,
 }
 export {
+  autoIde,
+  autoWeixinIde,
   closeIde,
+  getIdeStatus,
+  getWeixinIdeStatus,
   openIde,
+  previewIde,
+  previewWeixinIde,
   runAlipayIde,
   runWeixinIde,
 }
@@ -84,8 +90,12 @@ export type {
   IdeAction,
   IdeOptions,
   IdePlatform,
+  IdePreviewOptions,
+  IdePreviewRequest,
+  IdePreviewResult,
   IdeRequest,
   IdeResult,
+  IdeStatusResult,
   LoadConfigOptions,
   LoadedConfig,
   MaybePromise,
@@ -124,14 +134,20 @@ const wotci = {
   PreviewUnsupportedError,
   UploadError,
   WotCIError,
+  autoIde,
+  autoWeixinIde,
   closeIde,
   compareVersion,
   defineConfig,
+  getIdeStatus,
+  getWeixinIdeStatus,
   loadConfig,
   normalizePlatform,
   openIde,
   preview,
   previewAlipay,
+  previewIde,
+  previewWeixinIde,
   previewPlatform,
   previewWeixin,
   runAlipayIde,

@@ -4,14 +4,20 @@ import path from 'node:path'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
 const mocks = vi.hoisted(() => ({
+  autoIde: vi.fn(),
   closeIde: vi.fn(),
+  getIdeStatus: vi.fn(),
   openIde: vi.fn(),
+  previewIde: vi.fn(),
   uploadPlatform: vi.fn(),
 }))
 
 vi.mock('../src/ide', () => ({
+  autoIde: mocks.autoIde,
   closeIde: mocks.closeIde,
+  getIdeStatus: mocks.getIdeStatus,
   openIde: mocks.openIde,
+  previewIde: mocks.previewIde,
 }))
 
 vi.mock('../src/preview', () => ({
@@ -31,6 +37,9 @@ beforeEach(() => {
   vi.clearAllMocks()
   mocks.openIde.mockResolvedValue({ message: 'opened' })
   mocks.closeIde.mockResolvedValue({ message: 'closed' })
+  mocks.autoIde.mockResolvedValue({ message: 'auto-ok' })
+  mocks.getIdeStatus.mockResolvedValue({ installed: true, message: 'status-ok' })
+  mocks.previewIde.mockResolvedValue({ message: 'ide-preview-ok' })
 })
 
 afterEach(async () => {
@@ -121,5 +130,85 @@ describe('runCli IDE 子命令', () => {
     expect(exitCode).toBe(1)
     expect(stderr).toContain('[失败] 未找到 IDE')
     expect(stderr.some(line => line.includes('发生未预期错误'))).toBe(false)
+  })
+})
+
+describe('runCli IDE status / auto / preview', () => {
+  it('auto 传递 trust/ticket/port', async () => {
+    const cwd = await createProject()
+    const { stdout, writers } = createWriters()
+
+    const exitCode = await runCli([
+      'auto',
+      '-p',
+      'weixin',
+      '--trust-project',
+      '--ticket',
+      't-1',
+      '--port',
+      '9420',
+      '--dry-run',
+    ], { cwd, ...writers })
+
+    expect(exitCode).toBe(0)
+    expect(stdout.some(line => line.includes('正在开启微信小程序开发者工具自动化'))).toBe(true)
+    expect(stdout).toContain('[成功] auto-ok')
+    expect(mocks.autoIde).toHaveBeenCalledWith('weixin', expect.objectContaining({
+      cwd,
+      dryRun: true,
+      port: 9420,
+      ticket: 't-1',
+      trustProject: true,
+    }))
+  })
+
+  it('ide status 输出状态并以 installed 决定退出码', async () => {
+    const cwd = await createProject()
+    const { stdout, writers } = createWriters()
+
+    const ok = await runCli(['ide', 'status', '-p', 'weixin'], { cwd, ...writers })
+    expect(ok).toBe(0)
+    expect(stdout).toContain('status-ok')
+
+    mocks.getIdeStatus.mockResolvedValueOnce({ installed: false, message: 'not-installed' })
+    const missing = await runCli(['ide', 'status', '-p', 'weixin'], { cwd, ...writers })
+    expect(missing).toBe(1)
+  })
+
+  it('ide preview 传递二维码参数', async () => {
+    const cwd = await createProject()
+    const { stdout, writers } = createWriters()
+
+    const exitCode = await runCli([
+      'ide',
+      'preview',
+      '-p',
+      'weixin',
+      '--qr-format',
+      'base64',
+      '--qr-output',
+      'out/qr.txt',
+      '--info-output',
+      'out/info.json',
+    ], { cwd, ...writers })
+
+    expect(exitCode).toBe(0)
+    expect(stdout).toContain('[成功] ide-preview-ok')
+    expect(mocks.previewIde).toHaveBeenCalledWith('weixin', expect.objectContaining({
+      cwd,
+      infoOutput: 'out/info.json',
+      qrFormat: 'base64',
+      qrOutput: 'out/qr.txt',
+    }))
+  })
+
+  it('未知 ide 子命令返回错误', async () => {
+    const cwd = await createProject()
+    const { stderr, writers } = createWriters()
+
+    const exitCode = await runCli(['ide', 'unknown'], { cwd, ...writers })
+
+    expect(exitCode).toBe(1)
+    expect(stderr.some(line => line.includes('未知 ide 子命令'))).toBe(true)
   })
 })

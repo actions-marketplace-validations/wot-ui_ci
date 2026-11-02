@@ -222,7 +222,7 @@ JSON 结构草案：
 
 ### v0.4.1 — IDE 与本地开发集成（P0）
 
-> 状态：`open` / `close` / `quit`、`--dry-run`、CI 保护和路径探测已实现，自动化调试与 IDE 侧预览待后续迭代。
+> 状态：`open` / `close` / `quit` / `auto` / `status` / `ide preview`、`--dry-run`、CI 保护和路径探测均已实现。
 
 除了 CI 侧的上传/预览，日常开发里最高频的动作是「打开开发者工具」和「让 IDE 加载最新产物」。微信和支付宝都提供了可脚本化的 IDE 入口，可以一并收进 `wotci`。
 

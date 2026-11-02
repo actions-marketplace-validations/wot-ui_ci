@@ -26,9 +26,21 @@ vi.mock('minidev', () => {
   }
 })
 
-const { closeIde, openIde } = await import('../src/ide')
+const {
+  autoIde,
+  closeIde,
+  getIdeStatus,
+  openIde,
+  previewIde,
+} = await import('../src/ide')
 const { runAlipayIde } = await import('../src/ide/alipay')
-const { getWeixinCliCandidates, runWeixinIde } = await import('../src/ide/weixin')
+const {
+  autoWeixinIde,
+  getWeixinCliCandidates,
+  getWeixinIdeStatus,
+  previewWeixinIde,
+  runWeixinIde,
+} = await import('../src/ide/weixin')
 const {
   ConfigError,
   IdeError,
@@ -444,5 +456,448 @@ describe('支付宝 IDE 补充分支', () => {
     }, { cwd: fixture.cwd, dryRun: true })
 
     expect(result.message).toContain('/Applications/Alipay.app')
+  })
+})
+
+describe('iDE 状态查询', () => {
+  it('cLI 已安装且已登录', async () => {
+    const fixture = await createFixture()
+    mocks.runCommand.mockResolvedValueOnce({ stderr: '', stdout: 'true\n' })
+
+    const result = await getWeixinIdeStatus(weixinConfig(fixture.cliPath), { cwd: fixture.cwd })
+
+    expect(result).toMatchObject({
+      cliPath: fixture.cliPath,
+      installed: true,
+      loggedIn: true,
+      platform: 'weixin',
+    })
+    expect(result.message).toContain('已登录')
+  })
+
+  it('cLI 已安装但未登录', async () => {
+    const fixture = await createFixture()
+    mocks.runCommand.mockResolvedValueOnce({ stderr: '', stdout: 'false\n' })
+
+    const result = await getWeixinIdeStatus(weixinConfig(fixture.cliPath), { cwd: fixture.cwd })
+
+    expect(result.loggedIn).toBe(false)
+    expect(result.message).toContain('未登录')
+  })
+
+  it('输出无法判断登录状态时保留未知', async () => {
+    const fixture = await createFixture()
+    mocks.runCommand.mockResolvedValueOnce({ stderr: '', stdout: 'something\n' })
+
+    const result = await getWeixinIdeStatus(weixinConfig(fixture.cliPath), { cwd: fixture.cwd })
+
+    expect(result.loggedIn).toBeUndefined()
+    expect(result.message).toContain('登录状态未知')
+    expect(result.stdout).toBe('something')
+  })
+
+  it('cLI 不存在时返回 installed=false', async () => {
+    const fixture = await createFixture()
+
+    const result = await getWeixinIdeStatus(weixinConfig(path.join(fixture.cwd, 'missing-cli')), {
+      cwd: fixture.cwd,
+    })
+
+    expect(result.installed).toBe(false)
+    expect(result.message).toContain('未找到微信开发者工具 CLI')
+  })
+
+  it('命令执行失败时返回已安装但状态未知', async () => {
+    const fixture = await createFixture()
+    mocks.runCommand.mockRejectedValueOnce(new Error('boom'))
+
+    const result = await getWeixinIdeStatus(weixinConfig(fixture.cliPath), { cwd: fixture.cwd })
+
+    expect(result.installed).toBe(true)
+    expect(result.message).toContain('无法获取登录状态')
+  })
+
+  it('getIdeStatus 仅支持微信', async () => {
+    const fixture = await createFixture()
+
+    await expect(getIdeStatus('alipay', { config: alipayConfig(), cwd: fixture.cwd }))
+      .rejects
+      .toThrow(IdeUnsupportedError)
+    await expect(getIdeStatus('dingtalk', { cwd: fixture.cwd }))
+      .rejects
+      .toThrow(IdeUnsupportedError)
+  })
+})
+
+describe('iDE 自动化', () => {
+  it('组装 auto 命令并传递 trustProject / ticket / port / lang', async () => {
+    const fixture = await createFixture()
+
+    const result = await autoWeixinIde(weixinConfig(fixture.cliPath), {
+      cwd: fixture.cwd,
+      lang: 'zh',
+      port: 9420,
+      ticket: 'ticket-1',
+      trustProject: true,
+    })
+
+    expect(mocks.runCommand).toHaveBeenCalledWith({
+      command: fixture.cliPath,
+      args: [
+        'auto',
+        '--project',
+        fixture.weixinProject,
+        '--port',
+        '9420',
+        '--trust-project',
+        '--ticket',
+        'ticket-1',
+        '--lang',
+        'zh',
+      ],
+    }, { cwd: fixture.cwd })
+    expect(result).toMatchObject({ action: 'auto', executed: true, platform: 'weixin' })
+    expect(result.message).toContain('已开启微信开发者工具自动化')
+  })
+
+  it('dryRun 不执行', async () => {
+    const fixture = await createFixture()
+
+    const result = await autoWeixinIde(weixinConfig(fixture.cliPath), {
+      cwd: fixture.cwd,
+      dryRun: true,
+    })
+
+    expect(mocks.runCommand).not.toHaveBeenCalled()
+    expect(result.executed).toBe(false)
+    expect(result.message).toContain('将执行：')
+  })
+
+  it('项目目录不存在时拒绝', async () => {
+    const fixture = await createFixture()
+
+    await expect(autoWeixinIde({
+      weixin: {
+        appid: 'wx123',
+        ide: { cliPath: fixture.cliPath },
+        privateKeyPath: 'key',
+        projectPath: 'dist/missing',
+      },
+    }, { cwd: fixture.cwd }))
+      .rejects
+      .toThrow('微信小程序产物目录不存在')
+  })
+
+  it('autoIde 仅支持微信且在 CI 下默认拒绝', async () => {
+    const fixture = await createFixture()
+    const originalCi = process.env.CI
+
+    try {
+      await expect(autoIde('alipay', { config: alipayConfig(), cwd: fixture.cwd, force: true }))
+        .rejects
+        .toThrow(IdeUnsupportedError)
+
+      process.env.CI = 'true'
+      await expect(autoIde('weixin', { config: weixinConfig(fixture.cliPath), cwd: fixture.cwd }))
+        .rejects
+        .toThrow('检测到 CI 环境')
+    }
+    finally {
+      if (originalCi === undefined)
+        delete process.env.CI
+      else
+        process.env.CI = originalCi
+    }
+  })
+})
+
+describe('iDE 预览', () => {
+  it('默认生成 image 二维码并传递 info-output', async () => {
+    const fixture = await createFixture()
+
+    const result = await previewWeixinIde(weixinConfig(fixture.cliPath), {
+      cwd: fixture.cwd,
+      infoOutput: 'out/info.json',
+    })
+
+    expect(mocks.runCommand).toHaveBeenCalledWith({
+      command: fixture.cliPath,
+      args: [
+        'preview',
+        '--project',
+        fixture.weixinProject,
+        '--qr-format',
+        'image',
+        '--qr-output',
+        path.join(fixture.cwd, '.wotci/preview/weixin-ide.png'),
+        '--info-output',
+        path.join(fixture.cwd, 'out/info.json'),
+      ],
+    }, { cwd: fixture.cwd })
+    expect(result).toMatchObject({
+      executed: true,
+      infoPath: path.join(fixture.cwd, 'out/info.json'),
+      platform: 'weixin',
+    })
+    expect(result.qrCode).toEqual({
+      kind: 'file',
+      path: path.join(fixture.cwd, '.wotci/preview/weixin-ide.png'),
+      value: path.join(fixture.cwd, '.wotci/preview/weixin-ide.png'),
+    })
+  })
+
+  it('terminal 模式不传 qr-output', async () => {
+    const fixture = await createFixture()
+
+    const result = await previewWeixinIde(weixinConfig(fixture.cliPath), {
+      cwd: fixture.cwd,
+      qrFormat: 'terminal',
+    })
+
+    const call = mocks.runCommand.mock.calls[0][0] as { args: string[] }
+    expect(call.args).not.toContain('--qr-output')
+    expect(result.qrCode).toEqual({ kind: 'terminal', value: '' })
+  })
+
+  it('base64 模式读取文件内容', async () => {
+    const fixture = await createFixture()
+    mocks.runCommand.mockImplementationOnce(async () => {
+      await writeFile(path.join(fixture.cwd, '.wotci/preview/weixin-ide.txt'), 'YmFzZTY0\n')
+      return { stderr: '', stdout: '' }
+    })
+
+    const result = await previewWeixinIde(weixinConfig(fixture.cliPath), {
+      cwd: fixture.cwd,
+      qrFormat: 'base64',
+    })
+
+    expect(result.qrCode).toEqual({
+      kind: 'base64',
+      path: path.join(fixture.cwd, '.wotci/preview/weixin-ide.txt'),
+      value: 'YmFzZTY0',
+    })
+  })
+
+  it('dryRun 不执行命令', async () => {
+    const fixture = await createFixture()
+
+    const result = await previewWeixinIde(weixinConfig(fixture.cliPath), {
+      cwd: fixture.cwd,
+      dryRun: true,
+    })
+
+    expect(mocks.runCommand).not.toHaveBeenCalled()
+    expect(result.executed).toBe(false)
+    expect(result.qrCode).toBeUndefined()
+    expect(result.message).toContain('将执行：')
+  })
+
+  it('base64 文件读取失败时抛出 IdeError', async () => {
+    const fixture = await createFixture()
+
+    await expect(previewWeixinIde(weixinConfig(fixture.cliPath), {
+      cwd: fixture.cwd,
+      qrFormat: 'base64',
+    }))
+      .rejects
+      .toThrow('读取 IDE 预览二维码失败')
+  })
+
+  it('previewIde 仅支持微信且在 CI 下默认拒绝', async () => {
+    const fixture = await createFixture()
+    const originalCi = process.env.CI
+
+    try {
+      await expect(previewIde('alipay', { config: alipayConfig(), cwd: fixture.cwd, force: true }))
+        .rejects
+        .toThrow(IdeUnsupportedError)
+
+      process.env.CI = 'true'
+      await expect(previewIde('weixin', { config: weixinConfig(fixture.cliPath), cwd: fixture.cwd }))
+        .rejects
+        .toThrow('检测到 CI 环境')
+    }
+    finally {
+      if (originalCi === undefined)
+        delete process.env.CI
+      else
+        process.env.CI = originalCi
+    }
+  })
+})
+
+describe('iDE 包装入口与端口参数', () => {
+  it('getIdeStatus / autoIde / previewIde 走通微信路径', async () => {
+    const fixture = await createFixture()
+    mocks.runCommand.mockResolvedValue({ stderr: '', stdout: 'true\n' })
+
+    await expect(getIdeStatus('weixin', {
+      config: weixinConfig(fixture.cliPath),
+      cwd: fixture.cwd,
+    })).resolves.toMatchObject({ installed: true, loggedIn: true })
+
+    await expect(autoIde('weixin', {
+      config: weixinConfig(fixture.cliPath),
+      cwd: fixture.cwd,
+      force: true,
+    })).resolves.toMatchObject({ action: 'auto' })
+
+    await expect(previewIde('weixin', {
+      config: weixinConfig(fixture.cliPath),
+      cwd: fixture.cwd,
+      dryRun: true,
+    })).resolves.toMatchObject({ executed: false })
+  })
+
+  it('status 透传 port / lang', async () => {
+    const fixture = await createFixture()
+    mocks.runCommand.mockResolvedValueOnce({ stderr: '', stdout: 'true' })
+
+    await getWeixinIdeStatus(weixinConfig(fixture.cliPath), {
+      cwd: fixture.cwd,
+      lang: 'zh',
+      port: 9420,
+    })
+
+    expect(mocks.runCommand).toHaveBeenCalledWith({
+      command: fixture.cliPath,
+      args: ['islogin', '--port', '9420', '--lang', 'zh'],
+    }, { cwd: fixture.cwd })
+  })
+
+  it('iDE preview 透传 port / lang', async () => {
+    const fixture = await createFixture()
+
+    await previewWeixinIde(weixinConfig(fixture.cliPath), {
+      cwd: fixture.cwd,
+      dryRun: true,
+      lang: 'zh',
+      port: 9420,
+    })
+
+    const call = mocks.runCommand.mock.calls[0]?.[0] as { args: string[] } | undefined
+    // dryRun 不执行 runCommand，从返回的 message 也看不到参数，改为非 dryRun 校验
+    expect(call).toBeUndefined()
+
+    await previewWeixinIde(weixinConfig(fixture.cliPath), {
+      cwd: fixture.cwd,
+      lang: 'zh',
+      port: 9420,
+    })
+
+    expect(mocks.runCommand).toHaveBeenLastCalledWith({
+      command: fixture.cliPath,
+      args: [
+        'preview',
+        '--project',
+        fixture.weixinProject,
+        '--qr-format',
+        'image',
+        '--qr-output',
+        path.join(fixture.cwd, '.wotci/preview/weixin-ide.png'),
+        '--port',
+        '9420',
+        '--lang',
+        'zh',
+      ],
+    }, { cwd: fixture.cwd })
+  })
+})
+
+describe('iDE 补充默认参数与错误', () => {
+  it('auto 不传 cwd 时使用 process.cwd()', async () => {
+    const fixture = await createFixture()
+
+    const result = await autoWeixinIde({
+      weixin: {
+        appid: 'wx123',
+        ide: { cliPath: fixture.cliPath },
+        privateKeyPath: 'key',
+        projectPath: fixture.weixinProject,
+      },
+    }, { dryRun: true })
+
+    expect(result.executed).toBe(false)
+  })
+
+  it('status 不传 cwd 且输出为空时省略 stdout', async () => {
+    const fixture = await createFixture()
+    mocks.runCommand.mockResolvedValueOnce({ stderr: '', stdout: '\n' })
+
+    const result = await getWeixinIdeStatus({
+      weixin: {
+        appid: 'wx123',
+        ide: { cliPath: fixture.cliPath },
+        privateKeyPath: 'key',
+        projectPath: 'dist/weixin',
+      },
+    })
+
+    expect(result.stdout).toBeUndefined()
+  })
+
+  it('status 捕获非 Error 异常', async () => {
+    const fixture = await createFixture()
+    mocks.runCommand.mockRejectedValueOnce('string-error')
+
+    const result = await getWeixinIdeStatus(weixinConfig(fixture.cliPath), { cwd: fixture.cwd })
+
+    expect(result.message).toContain('string-error')
+  })
+
+  it('iDE 预览 dryRun 携带 infoOutput', async () => {
+    const fixture = await createFixture()
+
+    const result = await previewWeixinIde(weixinConfig(fixture.cliPath), {
+      cwd: fixture.cwd,
+      dryRun: true,
+      infoOutput: 'out/info.json',
+    })
+
+    expect(result.infoPath).toBe(path.join(fixture.cwd, 'out/info.json'))
+  })
+
+  it('iDE 预览不传 cwd 时使用 process.cwd() 并透传 stdout', async () => {
+    const fixture = await createFixture()
+    mocks.runCommand.mockResolvedValueOnce({ stderr: '', stdout: 'preview-output\n' })
+
+    const result = await previewWeixinIde({
+      weixin: {
+        appid: 'wx123',
+        ide: { cliPath: fixture.cliPath },
+        privateKeyPath: 'key',
+        projectPath: fixture.weixinProject,
+      },
+    })
+
+    expect(result.stdout).toBe('preview-output')
+  })
+})
+
+describe('微信 CLI 环境变量回退', () => {
+  it('没有 cliPath 且环境变量路径不存在时抛出 IdeNotFoundError', async () => {
+    const fixture = await createFixture()
+    const originalEnv = process.env.WECHAT_DEVTOOLS_CLI
+    const platformSpy = vi.spyOn(process, 'platform', 'get').mockReturnValue('freebsd' as NodeJS.Platform)
+    process.env.WECHAT_DEVTOOLS_CLI = path.join(fixture.cwd, 'missing-env-cli')
+
+    try {
+      await expect(runWeixinIde('open', {
+        weixin: {
+          appid: 'wx123',
+          privateKeyPath: 'key',
+          projectPath: 'dist/weixin',
+        },
+      }, { cwd: fixture.cwd }))
+        .rejects
+        .toThrow(IdeNotFoundError)
+    }
+    finally {
+      platformSpy.mockRestore()
+      if (originalEnv === undefined)
+        delete process.env.WECHAT_DEVTOOLS_CLI
+      else
+        process.env.WECHAT_DEVTOOLS_CLI = originalEnv
+    }
   })
 })
