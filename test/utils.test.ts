@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import { ConfigError, formatErrorReport, formatErrorStack, UploadError, WotCIError } from '../src/errors'
+import { createCliLogger } from '../src/logger'
 import {
   appendDesc,
   createCliConfigLoadedMessage,
@@ -9,6 +10,7 @@ import {
   getPlatformLabel,
 } from '../src/messages'
 import { isPlainObject, unwrapModuleExport } from '../src/utils/module'
+import { resolveFromCwd } from '../src/utils/path'
 import { compareVersion } from '../src/utils/version'
 
 describe('compareVersion', () => {
@@ -107,5 +109,70 @@ describe('messages', () => {
   it('帮助信息包含平台说明', () => {
     expect(createCliHelpText()).toContain('wotci --platform')
     expect(createCliHelpText()).toContain('--cwd')
+  })
+})
+
+describe('path utils', () => {
+  it('相对路径基于 cwd 解析，绝对路径原样返回', () => {
+    expect(resolveFromCwd('/tmp/project', 'dist/weixin')).toBe('/tmp/project/dist/weixin')
+    expect(resolveFromCwd('/tmp/project', '/opt/keys/private.key')).toBe('/opt/keys/private.key')
+  })
+})
+
+describe('logger', () => {
+  it('未注入 writer 时返回 consola 实例', () => {
+    const logger = createCliLogger()
+
+    expect(typeof logger.info).toBe('function')
+    expect(typeof logger.error).toBe('function')
+  })
+
+  it('处理 Error、字符串与其它类型的参数', () => {
+    const stdout: string[] = []
+    const stderr: string[] = []
+    const logger = createCliLogger({
+      stderr: message => stderr.push(message),
+      stdout: message => stdout.push(message),
+    })
+
+    logger.log('value', 42, { a: 1 })
+    logger.error(new Error('boom'))
+
+    expect(stdout).toEqual(['value 42 [object Object]'])
+    expect(stderr).toEqual(['[失败] boom'])
+  })
+
+  it('只注入单侧 writer 时另一侧静默', () => {
+    const stdout: string[] = []
+    const logger = createCliLogger({ stdout: message => stdout.push(message) })
+
+    logger.error('ignored')
+    logger.info('kept')
+
+    expect(stdout).toEqual(['[信息] kept'])
+  })
+})
+
+describe('formatUnknownError', () => {
+  it('无法 JSON 序列化时回退到 String', () => {
+    const circular: Record<string, unknown> = {}
+    circular.self = circular
+
+    expect(formatErrorReport(circular)).toEqual(['[object Object]'])
+  })
+})
+
+describe('formatErrorReport 普通错误', () => {
+  it('没有 cause 时只输出自身消息', () => {
+    expect(formatErrorReport(new Error('single error'))).toEqual(['single error'])
+  })
+})
+
+describe('error.message 为空', () => {
+  it('回退到错误名称', () => {
+    const error = new Error('placeholder')
+    error.message = ''
+
+    expect(formatErrorReport(error)).toEqual(['Error'])
   })
 })

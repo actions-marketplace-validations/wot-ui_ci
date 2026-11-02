@@ -327,3 +327,101 @@ describe('loadConfig: 错误处理', () => {
     expect((error as ConfigError).cause).toBeInstanceOf(Error)
   })
 })
+
+describe('loadConfig: 更多异常分支', () => {
+  it('内联工厂抛错时包装为 ConfigError', async () => {
+    const cwd = await createProject()
+
+    const error = await loadConfig({
+      config: () => {
+        throw new Error('inline boom')
+      },
+      cwd,
+    }).catch((caught: unknown) => caught)
+
+    expect(error).toBeInstanceOf(ConfigError)
+    expect((error as ConfigError).message).toContain('执行配置函数失败')
+    expect((error as ConfigError).cause).toBeInstanceOf(Error)
+  })
+
+  it('配置文件中的工厂抛错时包装为 ConfigError', async () => {
+    const cwd = await createProject({
+      type: 'module',
+      files: {
+        'wotci.config.js': `export default () => { throw new Error('file boom') }\n`,
+      },
+    })
+
+    const error = await loadConfig({ cwd }).catch((caught: unknown) => caught)
+
+    expect(error).toBeInstanceOf(ConfigError)
+    expect((error as ConfigError).cause).toBeInstanceOf(Error)
+  })
+
+  it('.minicirc 语法错误时包装为 ConfigError', async () => {
+    const cwd = await createProject({
+      files: {
+        '.minicirc': '{ version: ',
+      },
+    })
+
+    const error = await loadConfig({ cwd }).catch((caught: unknown) => caught)
+
+    expect(error).toBeInstanceOf(ConfigError)
+    expect((error as ConfigError).cause).toBeInstanceOf(SyntaxError)
+  })
+
+  it('.minicirc 内容不是对象时抛出 ConfigError', async () => {
+    const cwd = await createProject({
+      files: {
+        '.minicirc': '"not-an-object"',
+      },
+    })
+
+    await expect(loadConfig({ cwd })).rejects.toThrow(ConfigError)
+  })
+
+  it('package.json 不是对象时抛出 ConfigError', async () => {
+    const cwd = await createProject()
+    await writeFile(path.join(cwd, 'package.json'), '[]')
+
+    await expect(loadConfig({ cwd })).rejects.toThrow(ConfigError)
+  })
+
+  it('package.json 的平台配置不是对象时抛出 ConfigError', async () => {
+    const cwd = await createProject({
+      packageJson: {
+        wotci: { alipay: [] },
+      },
+    })
+
+    await expect(loadConfig({ cwd })).rejects.toThrow('alipay 必须是对象')
+  })
+})
+
+describe('loadConfig: 显式空配置路径', () => {
+  it('configFile 为空白字符串时抛出 ConfigError', async () => {
+    const cwd = await createProject()
+
+    await expect(loadConfig({ configFile: '   ', cwd }))
+      .rejects
+      .toThrow('configFile 不能为空')
+  })
+})
+
+describe('loadConfig: 默认 cwd', () => {
+  it('未传 cwd 时使用 process.cwd()', async () => {
+    const cwd = await createProject()
+    const originalCwd = process.cwd()
+    process.chdir(cwd)
+
+    try {
+      const loaded = await loadConfig()
+      expect(loaded.cwd).toBe(process.cwd())
+      expect(loaded.source).toBe('defaults')
+    }
+    finally {
+      process.chdir(originalCwd)
+    }
+  })
+})

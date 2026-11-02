@@ -353,8 +353,11 @@ GitHub Actions 可参考 [.github/workflows/upload-playground.yml](.github/workf
 pnpm install
 pnpm typecheck
 pnpm test:run
+pnpm test:coverage
 pnpm build
 ```
+
+测试覆盖率由 vitest 统计，并对 statements / branches / functions / lines 设置 95% 阈值；`src/bin.ts` 是进程入口，依赖 `process.exit`，不纳入覆盖率统计。
 
 ## License
 

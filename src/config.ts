@@ -129,19 +129,13 @@ async function loadPackageConfig(
   packageJson: PackageJsonLike | undefined,
   source: ConfigSource,
 ): Promise<LoadedConfig> {
-  try {
-    const config = await resolveConfigValue(value, createContext(cwd, packageJson), label)
-    return {
-      config: withPackageDefaults(config, packageJson),
-      cwd,
-      packageJson,
-      source,
-    }
-  }
-  catch (error) {
-    if (error instanceof ConfigError)
-      throw error
-    throw new ConfigError(`解析 ${label} 失败`, error)
+  const config = await resolveConfigValue(value, createContext(cwd, packageJson), label)
+
+  return {
+    config: withPackageDefaults(config, packageJson),
+    cwd,
+    packageJson,
+    source,
   }
 }
 

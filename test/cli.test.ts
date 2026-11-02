@@ -200,3 +200,25 @@ describe('runCli', () => {
     expect(stderr.some(line => line.includes('不支持的平台：unknown'))).toBe(true)
   })
 })
+
+describe('长参数形式', () => {
+  it('支持 --platform / --config / --cwd', async () => {
+    const cwd = await createCliProject()
+    const stdout: string[] = []
+
+    const exitCode = await runCli([
+      '--platform',
+      'weixin',
+      '--config',
+      'wotci.config.js',
+      '--cwd',
+      cwd,
+    ], {
+      stderr: () => {},
+      stdout: message => stdout.push(message),
+    })
+
+    expect(exitCode).toBe(0)
+    expect(stdout.some(line => line.includes('[成功]'))).toBe(true)
+  })
+})
