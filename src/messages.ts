@@ -51,6 +51,7 @@ export function createCliHelpText(): string {
   return [
     '用法：',
     '  wotci upload  --platform <weixin|alipay|dingtalk|dd> [options]',
+    '  wotci release --platform <weixin,alipay,...> [options]',
     '  wotci preview --platform <weixin|alipay> [options]',
     '  wotci open   --platform <weixin|alipay> [options]',
     '  wotci close  --platform <weixin|alipay> [options]',
@@ -78,6 +79,13 @@ export function createCliHelpText(): string {
     '      --info-output <file> IDE 预览信息输出路径',
     '      --trust-project    auto 时信任当前项目',
     '      --ticket <ticket>  auto 时使用的 ticket',
+    '      --all              release 时发布配置中的所有平台',
+    '      --build <command>  release 时覆盖构建命令',
+    '      --skip-build       release 时跳过构建',
+    '      --history-file <file> 发布历史文件路径',
+    '      --no-history       不写发布历史',
+    '      --pr-comment       强制尝试评论 PR',
+    '      --no-pr-comment    不评论 PR',
     '  -h, --help             查看帮助信息',
   ].join('\n')
 }

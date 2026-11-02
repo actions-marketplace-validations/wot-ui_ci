@@ -359,3 +359,35 @@ describe('iDE status / auto 参数', () => {
     expect(help).toContain('wotci ide preview')
   })
 })
+
+describe('release 参数', () => {
+  it('解析平台列表与构建/历史/评论选项', () => {
+    expect(parseCliArgs([
+      'release',
+      '-p',
+      'weixin,alipay',
+      '--build',
+      'npm run build',
+      '--skip-build',
+      '--no-history',
+      '--history-file',
+      'custom/history.json',
+      '--no-pr-comment',
+      '--all',
+    ])).toEqual({
+      all: true,
+      build: 'npm run build',
+      command: 'release',
+      history: false,
+      historyFile: 'custom/history.json',
+      platform: 'weixin,alipay',
+      prComment: false,
+      skipBuild: true,
+    })
+  })
+
+  it('帮助信息包含 release', () => {
+    expect(createCliHelpText()).toContain('wotci release')
+    expect(createCliHelpText()).toContain('--pr-comment')
+  })
+})

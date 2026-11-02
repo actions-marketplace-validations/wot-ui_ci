@@ -425,3 +425,27 @@ describe('loadConfig: 默认 cwd', () => {
     }
   })
 })
+
+describe('release 配置校验', () => {
+  it('release 不是对象时抛出 ConfigError', async () => {
+    const cwd = await createProject({
+      type: 'module',
+      files: {
+        'wotci.config.js': `export default { release: 'invalid' }\n`,
+      },
+    })
+
+    await expect(loadConfig({ cwd })).rejects.toThrow('release 必须是对象')
+  })
+
+  it('release.platforms 不是数组时抛出 ConfigError', async () => {
+    const cwd = await createProject({
+      type: 'module',
+      files: {
+        'wotci.config.js': `export default { release: { platforms: 'weixin' } }\n`,
+      },
+    })
+
+    await expect(loadConfig({ cwd })).rejects.toThrow('release.platforms 必须是数组')
+  })
+})

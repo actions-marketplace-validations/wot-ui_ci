@@ -37,6 +37,20 @@ export class PreviewUnsupportedError extends WotCIError {
   }
 }
 
+export class ReleaseError extends WotCIError {
+  constructor(message: string, cause?: unknown) {
+    super(message, 'RELEASE_ERROR', cause)
+    this.name = 'ReleaseError'
+  }
+}
+
+export class BuildError extends WotCIError {
+  constructor(message: string, cause?: unknown) {
+    super(message, 'BUILD_ERROR', cause)
+    this.name = 'BuildError'
+  }
+}
+
 export class IdeError extends WotCIError {
   constructor(message: string, code = 'IDE_ERROR', cause?: unknown) {
     super(message, code, cause)

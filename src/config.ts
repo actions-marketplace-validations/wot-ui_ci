@@ -209,6 +209,13 @@ function normalizeConfig(config: WotciConfig, label: string): WotciConfig {
       throw new ConfigError(`${label}中的 ${key} 必须是对象`)
   }
 
+  if (config.release !== undefined) {
+    if (!isPlainObject(config.release))
+      throw new ConfigError(`${label}中的 release 必须是对象`)
+    if (config.release.platforms !== undefined && !Array.isArray(config.release.platforms))
+      throw new ConfigError(`${label}中的 release.platforms 必须是数组`)
+  }
+
   const { dd, ...rest } = config
   const dingtalk = rest.dingtalk ?? dd
 

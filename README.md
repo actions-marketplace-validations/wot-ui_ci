@@ -7,6 +7,7 @@
 - 支持微信、支付宝、钉钉三端小程序上传
 - 微信上传链路基于 `miniprogram-ci` 2.x
 - 提供 CLI（`wotci`）与 JS API（`upload`、`uploadPlatform`、`uploadWeixin` 等）
+- 支持 `release` 一步完成构建、多平台上传、历史记录与 PR 评论
 - 支持微信、支付宝预览二维码（文件 / 终端 / URL）
 - 支持通过 CLI/JS API 打开、关闭微信与支付宝开发者工具
 - 支持 `wotci.config.ts/js/mjs/cjs/mts/cts` 配置文件，TS 配置在 CommonJS 项目中同样可用
@@ -159,6 +160,98 @@ wotci ide preview -p weixin --qr-output dist/ide-preview.png
 `wotci ide status` 通过 `cli islogin` 判断登录状态；如果 IDE 未启动，该命令可能会启动 IDE。`wotci ide preview` 与 `wotci preview` 的区别是：前者走 IDE 自身 CLI、依赖本机登录态，后者走 `miniprogram-ci`、适合 CI。
 
 为避免 CI 卡在 GUI 上，`CI=true` 时 `open` 默认拒绝执行；`--dry-run` 不受此限制。
+
+## 发布编排（release）
+
+`release` 把「构建 → 多平台上传 → 记录历史 → 评论 PR」串成一条命令：
+
+```sh
+# 构建并发布配置中的所有平台
+wotci release
+
+# 覆盖构建命令
+wotci release --build "uni build -p mp-weixin"
+
+# 只发布指定平台
+wotci release -p weixin,alipay
+
+# 跳过构建，直接上传已有产物
+wotci release --skip-build
+
+# 只看计划
+wotci release --dry-run
+
+# 关闭历史 / PR 评论
+wotci release --no-history --no-pr-comment
+```
+
+配置：
+
+```ts
+export default defineConfig({
+  version: '1.2.3',
+  release: {
+    buildCommand: 'uni build -p mp-weixin',
+    platforms: ['weixin', 'alipay'],
+    history: true,
+    historyFile: '.wotci/history.json',
+    historyLimit: 50,
+    prComment: 'auto',
+  },
+})
+```
+
+`release` 的行为：
+
+- 构建命令失败：不再上传，返回构建错误
+- 单个平台上传失败：继续其它平台，最后以退出码 `1` 结束
+- 历史写入失败、PR 评论失败：只告警，不影响发布结果
+- `--dry-run`：不执行构建、不上传、不写历史、不评论
+
+### 发布历史
+
+默认写入 `.wotci/history.json`：
+
+```json
+{
+  "version": 1,
+  "records": [
+    {
+      "id": "uuid",
+      "createdAt": "2026-01-01T00:00:00.000Z",
+      "version": "1.2.3",
+      "ok": true,
+      "git": { "branch": "main", "commit": "abc1234" },
+      "build": { "commands": ["uni build -p mp-weixin"], "ok": true, "skipped": false },
+      "platforms": [{ "platform": "weixin", "ok": true, "version": "1.2.3" }]
+    }
+  ]
+}
+```
+
+- 自动限制条数（`historyLimit`）
+- 原子写入，避免并发写坏文件
+- `.wotci/` 已在 `.gitignore` 中
+
+### PR 评论
+
+在 GitHub Actions 中设置：
+
+```yaml
+permissions:
+  contents: read
+  pull-requests: write
+  issues: write
+```
+
+`release` 会自动读取：
+
+- `GITHUB_TOKEN` / `GH_TOKEN`
+- `GITHUB_REPOSITORY`
+- PR 编号：`GITHUB_EVENT_PATH` 中的 `pull_request.number`，或 `GITHUB_REF=refs/pull/<n>/merge`
+- 可选 `GITHUB_API_URL`（GitHub Enterprise）
+
+评论内容包含平台结果、版本、包体积、耗时、构建命令、commit 和运行链接；同一 PR 使用 marker 更新已有评论，不会重复刷屏。
 
 ## 配置
 
@@ -387,6 +480,23 @@ interface UploadResult {
 }
 ```
 
+### 发布编排
+
+```ts
+import { release } from '@wot-ui/ci'
+
+const result = await release({
+  cwd: process.cwd(),
+  buildCommand: 'uni build -p mp-weixin',
+  platforms: ['weixin', 'alipay'],
+  prComment: 'auto',
+})
+
+console.log(result.ok)
+console.log(result.historyFile)
+console.log(result.commentUrl)
+```
+
 ### 生成预览二维码
 
 ```ts
@@ -483,6 +593,7 @@ await wotci.upload('weixin')
 - 配置错误抛出 `ConfigError`
 - 上传错误抛出 `UploadError`，原始错误挂在 `cause` 上
 - 预览错误抛出 `PreviewError`；平台不支持预览时抛出 `PreviewUnsupportedError`
+- 发布编排错误抛出 `ReleaseError`，构建失败抛出 `BuildError`
 - IDE 相关错误抛出 `IdeError` 的子类：`IdeNotFoundError`（找不到 IDE）、`IdeUnsupportedError`（平台不支持）、`IdeCommandError`（命令执行失败）
 - 以上错误都继承 `WotCIError`（带 `code` 字段）
 - `formatErrorReport(error)` 可以把 `cause` 链格式化为字符串数组

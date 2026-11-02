@@ -86,11 +86,14 @@ export async function uploadWeixin(
       version: config.version,
     }) as WeixinUploadRawResult
 
+    const sizes = getPackageSizes(raw?.subPackageInfo)
+
     return {
       desc: config.desc,
       message: createWeixinMessage(config.version, raw?.subPackageInfo, config.desc),
       platform: 'weixin',
       raw: raw ?? {},
+      ...(sizes ? { sizes } : {}),
       version: config.version,
     }
   }

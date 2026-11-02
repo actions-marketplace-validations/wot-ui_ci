@@ -317,6 +317,15 @@ wotci ide preview -p weixin --qr-output dist/ide-preview.png
 - CI 环境下默认不启动 GUI
 - IDE 相关测试通过 mock child_process，不依赖真实 GUI
 
+### v0.4.2 — 发布编排与协作（已实现）
+
+> 状态：`wotci release`、构建命令、发布历史、PR 评论已实现。
+
+- `release` 依次执行构建命令、多平台上传，部分失败继续
+- 历史写入 `.wotci/history.json`，支持条数限制与原子写入
+- GitHub Actions 自动更新 PR 评论（marker 去重）
+- `--dry-run` 只输出计划
+
 ### v0.5 — 版本、预算与体检（P1）
 
 #### 3.6 版本查询

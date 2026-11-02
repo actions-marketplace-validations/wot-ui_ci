@@ -187,6 +187,24 @@ export interface WotciConfig {
   dingtalk?: DingtalkConfig
   /** @deprecated 钉钉配置的历史别名，请使用 dingtalk */
   dd?: DingtalkConfig
+  /** release 编排配置 */
+  release?: ReleaseConfig
+}
+
+/** release 编排配置 */
+export interface ReleaseConfig {
+  /** 上传前执行的构建命令，字符串或按顺序执行的命令数组 */
+  buildCommand?: string | string[]
+  /** 参与 release 的平台，缺省为配置中已配置的平台 */
+  platforms?: Platform[]
+  /** 是否写入发布历史，默认 true */
+  history?: boolean
+  /** 历史文件路径，默认 .wotci/history.json */
+  historyFile?: string
+  /** 历史保留条数，默认 50 */
+  historyLimit?: number
+  /** 是否评论 PR：true 总是尝试，false 关闭，auto 在 GitHub Actions 中自动 */
+  prComment?: boolean | 'auto'
 }
 
 /** @deprecated 请使用 WotciConfig */
@@ -330,6 +348,96 @@ export interface IdeRequest extends IdeOptions {
   configFile?: string
 }
 
+/** release 构建结果 */
+export interface ReleaseBuildResult {
+  /** 实际执行的构建命令 */
+  commands: string[]
+  skipped: boolean
+  ok: boolean
+  durationMs: number
+  error?: {
+    code: string
+    message: string
+    cause?: string[]
+  }
+}
+
+/** release 中单个平台的结果 */
+export interface ReleasePlatformResult {
+  platform: Platform
+  ok: boolean
+  version?: string
+  sizes?: {
+    total?: number
+    main?: number
+  }
+  message: string
+  durationMs: number
+  error?: {
+    code: string
+    message: string
+    cause?: string[]
+  }
+}
+
+/** 发布历史里的 git 信息 */
+export interface ReleaseGitInfo {
+  branch?: string
+  commit?: string
+  tag?: string
+}
+
+/** release 结果 */
+export interface ReleaseResult {
+  ok: boolean
+  dryRun: boolean
+  version?: string
+  desc?: string
+  build: ReleaseBuildResult
+  platforms: ReleasePlatformResult[]
+  durationMs: number
+  historyFile?: string
+  historyError?: string
+  commentUrl?: string
+  commentError?: string
+  git?: ReleaseGitInfo
+}
+
+/** release 请求 */
+export interface ReleaseRequest extends UploadOptions {
+  /** 内联配置，传入后不再读取配置文件 */
+  config?: UserConfig
+  /** 显式指定的配置文件 */
+  configFile?: string
+  /** 覆盖构建命令 */
+  buildCommand?: string | string[]
+  /** 跳过构建 */
+  skipBuild?: boolean
+  /** 参与 release 的平台，缺省读取配置 */
+  platforms?: PlatformInput[]
+  /** 只输出计划，不执行构建/上传/历史/评论 */
+  dryRun?: boolean
+  /** 是否写历史，覆盖配置 */
+  history?: boolean
+  /** 历史文件路径，覆盖配置 */
+  historyFile?: string
+  /** 是否评论 PR，覆盖配置 */
+  prComment?: boolean | 'auto'
+}
+
+/** 发布历史单条记录 */
+export interface ReleaseHistoryRecord {
+  id: string
+  createdAt: string
+  version?: string
+  desc?: string
+  ok: boolean
+  durationMs: number
+  build: ReleaseBuildResult
+  platforms: ReleasePlatformResult[]
+  git?: ReleaseGitInfo
+}
+
 /** JS 调用入口的选项 */
 export interface UploadRequest extends UploadOptions {
   /** 内联配置，传入后不再读取配置文件 */
@@ -365,6 +473,11 @@ export interface UploadResult<TPlatform extends Platform = Platform, TRaw = unkn
   desc?: string
   /** 面向用户的一行结果描述 */
   message: string
+  /** 微信包体积，单位字节 */
+  sizes?: {
+    total?: number
+    main?: number
+  }
   /** SDK 原始返回值 */
   raw: TRaw
 }

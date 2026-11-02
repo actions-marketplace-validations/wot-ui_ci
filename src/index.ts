@@ -5,6 +5,7 @@ import {
   loadConfig,
 } from './config'
 import {
+  BuildError,
   ConfigError,
   IdeCommandError,
   IdeError,
@@ -12,6 +13,7 @@ import {
   IdeUnsupportedError,
   PreviewError,
   PreviewUnsupportedError,
+  ReleaseError,
   UploadError,
   WotCIError,
 } from './errors'
@@ -22,6 +24,7 @@ import { previewAlipay, uploadAlipay } from './platforms/alipay'
 import { uploadDingTalk } from './platforms/dingtalk'
 import { previewWeixin, uploadWeixin } from './platforms/weixin'
 import { preview, previewPlatform } from './preview'
+import { release } from './release'
 import { upload, uploadPlatform } from './upload'
 import { normalizePlatform } from './utils/platform'
 import { compareVersion } from './utils/version'
@@ -33,6 +36,7 @@ export {
   loadConfig,
 }
 export {
+  BuildError,
   ConfigError,
   IdeCommandError,
   IdeError,
@@ -40,9 +44,11 @@ export {
   IdeUnsupportedError,
   PreviewError,
   PreviewUnsupportedError,
+  ReleaseError,
   UploadError,
   WotCIError,
 }
+export { release }
 export {
   preview,
   previewAlipay,
@@ -108,6 +114,13 @@ export type {
   PreviewResult,
   ProjectType,
   QrCodeKind,
+  ReleaseBuildResult,
+  ReleaseConfig,
+  ReleaseGitInfo,
+  ReleaseHistoryRecord,
+  ReleasePlatformResult,
+  ReleaseRequest,
+  ReleaseResult,
   UploadOptions,
   UploadRequest,
   UploadResult,
@@ -123,6 +136,7 @@ export type {
 } from './types'
 
 const wotci = {
+  BuildError,
   CONFIG_FILE_NAMES,
   ConfigError,
   IdeCommandError,
@@ -132,6 +146,7 @@ const wotci = {
   LEGACY_CONFIG_FILE_NAME,
   PreviewError,
   PreviewUnsupportedError,
+  ReleaseError,
   UploadError,
   WotCIError,
   autoIde,
@@ -150,6 +165,7 @@ const wotci = {
   previewWeixinIde,
   previewPlatform,
   previewWeixin,
+  release,
   runAlipayIde,
   runWeixinIde,
   upload,

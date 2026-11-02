@@ -12,6 +12,7 @@ import {
   createCliUploadStartMessage,
 } from './messages'
 import { previewPlatform } from './preview'
+import { release } from './release'
 import { uploadPlatform } from './upload'
 import { normalizePlatform } from './utils/platform'
 
@@ -21,9 +22,11 @@ export interface RunCliOptions {
   stdout?: (message: string) => void
 }
 
-export type CliCommand = 'upload' | 'preview' | 'open' | 'close' | 'auto' | 'ide-status' | 'ide-preview'
+export type CliCommand = 'upload' | 'release' | 'preview' | 'open' | 'close' | 'auto' | 'ide-status' | 'ide-preview'
 
 export interface ParsedCliArgs {
+  all?: boolean
+  build?: string
   command?: CliCommand
   configFile?: string
   cwd?: string
@@ -31,23 +34,27 @@ export interface ParsedCliArgs {
   dryRun?: boolean
   force?: boolean
   help?: boolean
+  history?: boolean
+  historyFile?: string
   infoOutput?: string
   lang?: 'zh' | 'en'
   page?: string
   pageQuery?: string
   platform?: PlatformInput
   port?: number
+  prComment?: boolean
   qrFormat?: 'terminal' | 'image' | 'base64'
   qrOutput?: string
   query?: string
   quit?: boolean
   robot?: number
   scene?: string
+  skipBuild?: boolean
   ticket?: string
   trustProject?: boolean
 }
 
-const CLI_COMMANDS = new Set<CliCommand>(['upload', 'preview', 'open', 'close', 'auto'])
+const CLI_COMMANDS = new Set<CliCommand>(['upload', 'release', 'preview', 'open', 'close', 'auto'])
 
 export async function runCli(argv: string[] = process.argv.slice(2), options: RunCliOptions = {}): Promise<number> {
   const logger = createCliLogger(options)
@@ -61,19 +68,66 @@ export async function runCli(argv: string[] = process.argv.slice(2), options: Ru
       return 0
     }
 
-    if (!args.platform) {
+    if (!args.platform && command !== 'release') {
       logger.error('缺少必填参数：--platform')
       logger.log(createCliHelpText())
       return 1
     }
 
-    const platform = normalizePlatform(args.platform)
+    // release 可以不带 --platform，这里仅占位，后续分支不会使用
+    const platform = command === 'release'
+      ? 'weixin'
+      : normalizePlatform(args.platform!)
     const loaded = await loadConfig({
       configFile: args.configFile,
       cwd: args.cwd ?? options.cwd,
     })
 
     logger.info(createCliConfigLoadedMessage(loaded.source, loaded.sourceFile))
+
+    if (command === 'release') {
+      logger.start('开始构建并发布小程序...')
+
+      const platformInput = args.platform
+        ? args.platform.split(',').map(item => item.trim()).filter(Boolean) as PlatformInput[]
+        : undefined
+      const result = await release({
+        buildCommand: args.build,
+        config: loaded.config,
+        cwd: loaded.cwd,
+        dryRun: args.dryRun,
+        history: args.history,
+        historyFile: args.historyFile,
+        platforms: args.all ? undefined : platformInput,
+        prComment: args.prComment,
+        skipBuild: args.skipBuild,
+      })
+
+      if (result.build.error)
+        logger.error(`构建失败：${result.build.error.message}`)
+
+      for (const item of result.platforms) {
+        if (item.ok)
+          logger.success(`[${item.platform}] ${item.message}`)
+        else
+          logger.error(`[${item.platform}] ${item.message}`)
+      }
+
+      if (result.dryRun)
+        logger.log(`dry-run：构建 ${result.build.skipped ? '跳过' : result.build.commands.join(' → ') || '未配置'}，平台 ${result.platforms.map(item => item.platform).join(', ')}`)
+
+      if (result.historyFile)
+        logger.info(`发布历史已写入：${result.historyFile}`)
+      if (result.historyError)
+        logger.error(`写入发布历史失败：${result.historyError}`)
+      if (result.commentUrl)
+        logger.info(`PR 评论：${result.commentUrl}`)
+      if (result.commentError)
+        logger.error(`PR 评论失败：${result.commentError}`)
+
+      logger.success(result.ok ? '发布完成' : '发布失败')
+      return result.ok ? 0 : 1
+    }
 
     if (command === 'ide-status') {
       const result = await getIdeStatus(platform, {
@@ -275,6 +329,27 @@ export function parseCliArgs(argv: string[]): ParsedCliArgs {
         break
       case '--ticket':
         parsed.ticket = readOptionValue(argv, ++index, current)
+        break
+      case '--all':
+        parsed.all = true
+        break
+      case '--build':
+        parsed.build = readOptionValue(argv, ++index, current)
+        break
+      case '--skip-build':
+        parsed.skipBuild = true
+        break
+      case '--history-file':
+        parsed.historyFile = readOptionValue(argv, ++index, current)
+        break
+      case '--no-history':
+        parsed.history = false
+        break
+      case '--pr-comment':
+        parsed.prComment = true
+        break
+      case '--no-pr-comment':
+        parsed.prComment = false
         break
       default:
         throw new ConfigError(`未知参数：${current}`)
