@@ -359,6 +359,10 @@ pnpm build
 
 测试覆盖率由 vitest 统计，并对 statements / branches / functions / lines 设置 95% 阈值；`src/bin.ts` 是进程入口，依赖 `process.exit`，不纳入覆盖率统计。
 
+## 路线图
+
+后续功能规划（预览、批量执行、版本管理、体检等）见 [docs/roadmap.md](docs/roadmap.md)。
+
 ## License
 
 MIT
