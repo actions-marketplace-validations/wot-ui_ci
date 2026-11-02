@@ -10,15 +10,18 @@ import {
   IdeError,
   IdeNotFoundError,
   IdeUnsupportedError,
+  PreviewError,
+  PreviewUnsupportedError,
   UploadError,
   WotCIError,
 } from './errors'
 import { closeIde, openIde } from './ide'
 import { runAlipayIde } from './ide/alipay'
 import { runWeixinIde } from './ide/weixin'
-import { uploadAlipay } from './platforms/alipay'
+import { previewAlipay, uploadAlipay } from './platforms/alipay'
 import { uploadDingTalk } from './platforms/dingtalk'
-import { uploadWeixin } from './platforms/weixin'
+import { previewWeixin, uploadWeixin } from './platforms/weixin'
+import { preview, previewPlatform } from './preview'
 import { upload, uploadPlatform } from './upload'
 import { normalizePlatform } from './utils/platform'
 import { compareVersion } from './utils/version'
@@ -35,8 +38,16 @@ export {
   IdeError,
   IdeNotFoundError,
   IdeUnsupportedError,
+  PreviewError,
+  PreviewUnsupportedError,
   UploadError,
   WotCIError,
+}
+export {
+  preview,
+  previewAlipay,
+  previewPlatform,
+  previewWeixin,
 }
 export {
   closeIde,
@@ -58,7 +69,10 @@ export type {
   AlipayClientType,
   AlipayConfig,
   AlipayIdeConfig,
+  AlipayPreviewConfig,
+  AlipayPreviewRawResult,
   AlipayUploadRawResult,
+  AnyPreviewResult,
   AnyUploadResult,
   CIConfig,
   ConfigFactory,
@@ -78,13 +92,20 @@ export type {
   PackageJsonLike,
   Platform,
   PlatformInput,
+  PreviewOptions,
+  PreviewQrCode,
+  PreviewRequest,
+  PreviewResult,
   ProjectType,
+  QrCodeKind,
   UploadOptions,
   UploadRequest,
   UploadResult,
   UserConfig,
   WeixinConfig,
   WeixinIdeConfig,
+  WeixinPreviewConfig,
+  WeixinPreviewRawResult,
   WeixinSubPackageInfo,
   WeixinUploadRawResult,
   WeixinUploadSetting,
@@ -99,6 +120,8 @@ const wotci = {
   IdeNotFoundError,
   IdeUnsupportedError,
   LEGACY_CONFIG_FILE_NAME,
+  PreviewError,
+  PreviewUnsupportedError,
   UploadError,
   WotCIError,
   closeIde,
@@ -107,6 +130,10 @@ const wotci = {
   loadConfig,
   normalizePlatform,
   openIde,
+  preview,
+  previewAlipay,
+  previewPlatform,
+  previewWeixin,
   runAlipayIde,
   runWeixinIde,
   upload,

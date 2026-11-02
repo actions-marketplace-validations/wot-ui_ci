@@ -8,6 +8,10 @@ vi.mock('../src/ide', () => ({
   openIde: vi.fn(),
 }))
 
+vi.mock('../src/preview', () => ({
+  previewPlatform: vi.fn(),
+}))
+
 vi.mock('../src/upload', () => ({
   normalizePlatform: (platform: string) => platform === 'dd' ? 'dingtalk' : platform,
   uploadPlatform: vi.fn(),

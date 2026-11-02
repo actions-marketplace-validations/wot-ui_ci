@@ -18,6 +18,19 @@ runCli()
 
 function flush(stream: NodeJS.WriteStream): Promise<void> {
   return new Promise((resolve) => {
-    stream.write('', () => resolve())
+    if (stream.destroyed) {
+      resolve()
+      return
+    }
+
+    const done = (): void => resolve()
+    stream.once('error', done)
+
+    try {
+      stream.write('', done)
+    }
+    catch {
+      done()
+    }
   })
 }

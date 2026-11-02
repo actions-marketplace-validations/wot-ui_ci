@@ -8,8 +8,10 @@ import {
   createCliConfigLoadedMessage,
   createCliHelpText,
   createCliIdeStartMessage,
+  createCliPreviewStartMessage,
   createCliUploadStartMessage,
 } from './messages'
+import { previewPlatform } from './preview'
 import { uploadPlatform } from './upload'
 import { normalizePlatform } from './utils/platform'
 
@@ -19,22 +21,30 @@ export interface RunCliOptions {
   stdout?: (message: string) => void
 }
 
-export type CliCommand = 'upload' | 'open' | 'close'
+export type CliCommand = 'upload' | 'preview' | 'open' | 'close'
 
 export interface ParsedCliArgs {
   command?: CliCommand
   configFile?: string
   cwd?: string
+  desc?: string
   dryRun?: boolean
   force?: boolean
   help?: boolean
   lang?: 'zh' | 'en'
+  page?: string
+  pageQuery?: string
   platform?: PlatformInput
   port?: number
+  qrFormat?: 'terminal' | 'image' | 'base64'
+  qrOutput?: string
+  query?: string
   quit?: boolean
+  robot?: number
+  scene?: string
 }
 
-const CLI_COMMANDS = new Set<CliCommand>(['upload', 'open', 'close'])
+const CLI_COMMANDS = new Set<CliCommand>(['upload', 'preview', 'open', 'close'])
 
 export async function runCli(argv: string[] = process.argv.slice(2), options: RunCliOptions = {}): Promise<number> {
   const logger = createCliLogger(options)
@@ -61,6 +71,25 @@ export async function runCli(argv: string[] = process.argv.slice(2), options: Ru
     })
 
     logger.info(createCliConfigLoadedMessage(loaded.source, loaded.sourceFile))
+
+    if (command === 'preview') {
+      logger.start(createCliPreviewStartMessage(platform))
+
+      const result = await previewPlatform(platform, loaded.config, {
+        cwd: loaded.cwd,
+        desc: args.desc,
+        pagePath: args.page,
+        pageQuery: args.pageQuery,
+        qrFormat: args.qrFormat,
+        qrOutput: args.qrOutput,
+        query: args.query,
+        robot: args.robot,
+        scene: args.scene,
+      })
+
+      logger.success(result.message)
+      return 0
+    }
 
     if (command === 'open' || command === 'close') {
       const action: IdeAction = command === 'close' && args.quit ? 'quit' : command
@@ -151,6 +180,30 @@ export function parseCliArgs(argv: string[]): ParsedCliArgs {
       case '--lang':
         parsed.lang = readLang(argv, ++index, current)
         break
+      case '--qr-format':
+        parsed.qrFormat = readQrFormat(argv, ++index, current)
+        break
+      case '--qr-output':
+        parsed.qrOutput = readOptionValue(argv, ++index, current)
+        break
+      case '--page':
+        parsed.page = readOptionValue(argv, ++index, current)
+        break
+      case '--page-query':
+        parsed.pageQuery = readOptionValue(argv, ++index, current)
+        break
+      case '--query':
+        parsed.query = readOptionValue(argv, ++index, current)
+        break
+      case '--scene':
+        parsed.scene = readOptionValue(argv, ++index, current)
+        break
+      case '--desc':
+        parsed.desc = readOptionValue(argv, ++index, current)
+        break
+      case '--robot':
+        parsed.robot = readRobot(argv, ++index, current)
+        break
       default:
         throw new ConfigError(`未知参数：${current}`)
     }
@@ -172,6 +225,29 @@ function readPort(argv: string[], index: number, optionName: string): number {
 
   if (!Number.isInteger(value) || value < 1 || value > 65535)
     throw new ConfigError(`参数 ${optionName} 必须是 1-65535 的整数：${raw}`)
+
+  return value
+}
+
+function readQrFormat(
+  argv: string[],
+  index: number,
+  optionName: string,
+): 'terminal' | 'image' | 'base64' {
+  const raw = readOptionValue(argv, index, optionName)
+
+  if (raw !== 'terminal' && raw !== 'image' && raw !== 'base64')
+    throw new ConfigError(`参数 ${optionName} 必须是 terminal、image 或 base64：${raw}`)
+
+  return raw
+}
+
+function readRobot(argv: string[], index: number, optionName: string): number {
+  const raw = readOptionValue(argv, index, optionName)
+  const value = Number(raw)
+
+  if (!Number.isInteger(value) || value < 1 || value > 30)
+    throw new ConfigError(`参数 ${optionName} 必须是 1-30 的整数：${raw}`)
 
   return value
 }

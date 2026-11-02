@@ -23,6 +23,20 @@ export class UploadError extends WotCIError {
   }
 }
 
+export class PreviewError extends WotCIError {
+  constructor(message: string, cause?: unknown) {
+    super(message, 'PREVIEW_ERROR', cause)
+    this.name = 'PreviewError'
+  }
+}
+
+export class PreviewUnsupportedError extends WotCIError {
+  constructor(message: string, cause?: unknown) {
+    super(message, 'PREVIEW_UNSUPPORTED', cause)
+    this.name = 'PreviewUnsupportedError'
+  }
+}
+
 export class IdeError extends WotCIError {
   constructor(message: string, code = 'IDE_ERROR', cause?: unknown) {
     super(message, code, cause)

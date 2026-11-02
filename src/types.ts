@@ -34,6 +34,30 @@ export interface WeixinUploadSetting {
   [key: string]: unknown
 }
 
+/** 微信小程序预览配置 */
+export interface WeixinPreviewConfig {
+  /** 二维码格式，默认 image */
+  qrcodeFormat?: 'terminal' | 'image' | 'base64'
+  /** 二维码输出路径；image / base64 时必填，缺省写入 .wotci/preview */
+  qrcodeOutputDest?: string
+  /** 预览页面路径 */
+  pagePath?: string
+  /** 预览页面启动参数 */
+  searchQuery?: string
+  /** 场景值 */
+  scene?: number
+  /** 预览备注 */
+  desc?: string
+  /** 指定 CI 机器人，1 ~ 30 */
+  robot?: number
+  /** 预览编译设置 */
+  setting?: WeixinUploadSetting
+  /** 本地编译线程数 */
+  threads?: number
+  /** 预览时主包、分包体积上限调整为 4M */
+  bigPackageSizeSupport?: boolean
+}
+
 /** 微信开发者工具配置 */
 export interface WeixinIdeConfig {
   /** 微信开发者工具 CLI 路径，缺省时自动探测 */
@@ -62,6 +86,8 @@ export interface WeixinConfig {
   setting?: WeixinUploadSetting
   /** 开发者工具相关配置 */
   ide?: WeixinIdeConfig
+  /** 预览配置 */
+  preview?: WeixinPreviewConfig
 }
 
 /** 支付宝小程序终端类型 */
@@ -78,6 +104,24 @@ export type AlipayClientType
     | 'cainiao'
     | 'alihealth'
     | 'health'
+
+/** 支付宝小程序预览配置 */
+export interface AlipayPreviewConfig {
+  /** 预览页面路径 */
+  page?: string
+  /** 页面参数 */
+  pageQuery?: string
+  /** 全局启动参数 */
+  query?: string
+  /** 场景值 */
+  scene?: string
+  /** 是否自动推送到客户端 */
+  autoPush?: boolean
+  /** 忽略 HTTP 请求白名单校验 */
+  ignoreHttpDomainCheck?: boolean
+  /** 忽略 WebView 域名白名单校验 */
+  ignoreWebViewDomainCheck?: boolean
+}
 
 /** 支付宝开发者工具配置 */
 export interface AlipayIdeConfig {
@@ -103,6 +147,8 @@ export interface AlipayConfig {
   autoincrement?: boolean
   /** 开发者工具相关配置 */
   ide?: AlipayIdeConfig
+  /** 预览配置 */
+  preview?: AlipayPreviewConfig
 }
 
 /** 钉钉小程序类型 */
@@ -281,3 +327,82 @@ export type AnyUploadResult
   = | UploadResult<'weixin', WeixinUploadRawResult>
     | UploadResult<'alipay', AlipayUploadRawResult>
     | UploadResult<'dingtalk', DingtalkUploadRawResult>
+
+/** 微信预览的原始返回 */
+export interface WeixinPreviewRawResult {
+  subPackageInfo?: WeixinSubPackageInfo[]
+  pluginInfo?: Array<{
+    pluginProviderAppid: string
+    version: string
+    size: number
+  }>
+}
+
+/** 支付宝预览的原始返回 */
+export interface AlipayPreviewRawResult {
+  qrcodeUrl: string
+  qrcodeSchema?: string
+  version?: string
+}
+
+/** 二维码类型 */
+export type QrCodeKind = 'file' | 'url' | 'terminal' | 'base64'
+
+export interface PreviewQrCode {
+  kind: QrCodeKind
+  /** file 时为本地路径；url 时为二维码链接；base64 时为内容；terminal 时为空字符串 */
+  value: string
+  /** file / base64 写入的本地路径 */
+  path?: string
+  /** 支付宝远程二维码链接 */
+  url?: string
+}
+
+/** 单平台预览结果 */
+export interface PreviewResult<TPlatform extends Platform = Platform, TRaw = unknown> {
+  platform: TPlatform
+  version?: string
+  desc?: string
+  qrCode: PreviewQrCode
+  /** 面向用户的一行结果描述 */
+  message: string
+  /** 微信包体积，单位字节 */
+  sizes?: {
+    total?: number
+    main?: number
+  }
+  /** SDK 原始返回值 */
+  raw: TRaw
+}
+
+export type AnyPreviewResult
+  = | PreviewResult<'weixin', WeixinPreviewRawResult>
+    | PreviewResult<'alipay', AlipayPreviewRawResult>
+
+/** 预览选项 */
+export interface PreviewOptions extends UploadOptions {
+  /** 二维码格式 */
+  qrFormat?: 'terminal' | 'image' | 'base64'
+  /** 二维码输出路径，相对路径基于 cwd 解析 */
+  qrOutput?: string
+  /** 预览页面路径 */
+  pagePath?: string
+  /** 页面参数 */
+  pageQuery?: string
+  /** 全局启动参数 */
+  query?: string
+  /** 场景值，微信会转成数字 */
+  scene?: string | number
+  /** 预览备注 */
+  desc?: string
+  /** 指定 CI 机器人 */
+  robot?: number
+}
+
+/** JS 调用入口的预览选项 */
+export interface PreviewRequest extends PreviewOptions {
+  /** 内联配置，传入后不再读取配置文件 */
+  config?: UserConfig
+  /** 显式指定的配置文件 */
+  configFile?: string
+}

@@ -14,6 +14,10 @@ vi.mock('../src/ide', () => ({
   openIde: mocks.openIde,
 }))
 
+vi.mock('../src/preview', () => ({
+  previewPlatform: vi.fn(),
+}))
+
 vi.mock('../src/upload', () => ({
   uploadPlatform: mocks.uploadPlatform,
 }))

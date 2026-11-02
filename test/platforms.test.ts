@@ -5,8 +5,10 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
 const mocks = vi.hoisted(() => ({
   WeixinProject: vi.fn(),
+  weixinPreview: vi.fn(),
   weixinUpload: vi.fn(),
   alipayGetUploadedVersion: vi.fn(),
+  alipayPreview: vi.fn(),
   alipayUpload: vi.fn(),
   alipayUseDefaults: vi.fn(),
   dingtalkSetConfig: vi.fn(),
@@ -15,9 +17,11 @@ const mocks = vi.hoisted(() => ({
 
 vi.mock('miniprogram-ci', () => ({
   Project: mocks.WeixinProject,
+  preview: mocks.weixinPreview,
   upload: mocks.weixinUpload,
   default: {
     Project: mocks.WeixinProject,
+    preview: mocks.weixinPreview,
     upload: mocks.weixinUpload,
   },
 }))
@@ -28,6 +32,7 @@ vi.mock('minidev', () => {
       getUploadedVersion: mocks.alipayGetUploadedVersion,
     },
     upload: mocks.alipayUpload,
+    preview: mocks.alipayPreview,
   }
 
   return {
@@ -68,6 +73,12 @@ beforeEach(() => {
     subPackageInfo: [
       { name: '__FULL__', size: 2048 },
       { name: '__APP__', size: 1024 },
+    ],
+  })
+  mocks.weixinPreview.mockResolvedValue({
+    subPackageInfo: [
+      { name: '__FULL__', size: 4096 },
+      { name: '__APP__', size: 2048 },
     ],
   })
   mocks.alipayGetUploadedVersion.mockResolvedValue('1.0.0')

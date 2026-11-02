@@ -33,6 +33,10 @@ export function createCliUploadStartMessage(platform: Platform): string {
   return `开始上传${getPlatformLabel(platform)}...`
 }
 
+export function createCliPreviewStartMessage(platform: Platform): string {
+  return `正在生成${getPlatformLabel(platform)}预览二维码...`
+}
+
 export function createCliIdeStartMessage(platform: Platform, action: IdeAction): string {
   if (action === 'open')
     return `正在打开${getPlatformLabel(platform)}开发者工具...`
@@ -44,7 +48,8 @@ export function createCliIdeStartMessage(platform: Platform, action: IdeAction):
 export function createCliHelpText(): string {
   return [
     '用法：',
-    '  wotci upload --platform <weixin|alipay|dingtalk|dd> [options]',
+    '  wotci upload  --platform <weixin|alipay|dingtalk|dd> [options]',
+    '  wotci preview --platform <weixin|alipay> [options]',
     '  wotci open   --platform <weixin|alipay> [options]',
     '  wotci close  --platform <weixin|alipay> [options]',
     '',
@@ -57,6 +62,14 @@ export function createCliHelpText(): string {
     '      --port <number>    IDE HTTP server 端口',
     '      --lang <zh|en>     IDE 语言',
     '      --quit             关闭 IDE 而不是只关闭项目',
+    '      --qr-format <type> 预览二维码格式：terminal、image、base64',
+    '      --qr-output <file> 预览二维码输出路径',
+    '      --page <path>      预览页面路径',
+    '      --page-query <str> 页面参数',
+    '      --query <str>      全局启动参数',
+    '      --scene <value>    预览场景值',
+    '      --desc <text>      预览备注',
+    '      --robot <1-30>     指定 CI 机器人',
     '  -h, --help             查看帮助信息',
   ].join('\n')
 }

@@ -109,7 +109,7 @@ describe('messages', () => {
   })
 
   it('帮助信息包含平台说明', () => {
-    expect(createCliHelpText()).toContain('wotci upload --platform')
+    expect(createCliHelpText()).toContain('wotci upload')
     expect(createCliHelpText()).toContain('--cwd')
   })
 })

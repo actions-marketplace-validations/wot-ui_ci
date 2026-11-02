@@ -1,9 +1,20 @@
-import type { AlipayConfig, AlipayUploadRawResult, UploadOptions, UploadResult, WotciConfig } from '../types'
+import type {
+  AlipayConfig,
+  AlipayPreviewRawResult,
+  AlipayUploadRawResult,
+  PreviewOptions,
+  PreviewResult,
+  UploadOptions,
+  UploadResult,
+  WotciConfig,
+} from '../types'
 
-import { readFile } from 'node:fs/promises'
+import { Buffer } from 'node:buffer'
+import { mkdir, readFile, writeFile } from 'node:fs/promises'
+import path from 'node:path'
 import process from 'node:process'
 import * as minidevModule from 'minidev'
-import { UploadError } from '../errors'
+import { PreviewError, UploadError } from '../errors'
 import { appendDesc } from '../messages'
 import { isDirectory, resolveFromCwd } from '../utils/path'
 import { compareVersion } from '../utils/version'
@@ -23,6 +34,18 @@ interface MinidevRuntime {
       clientType: string
       experience: boolean
     }) => Promise<AlipayUploadRawResult>
+    preview: (options: {
+      project: string
+      appId: string
+      clientType: string
+      page?: string
+      pageQuery?: string
+      query?: string
+      scene?: string
+      autoPush?: boolean
+      ignoreHttpDomainCheck?: boolean
+      ignoreWebViewDomainCheck?: boolean
+    }) => Promise<AlipayPreviewRawResult>
   }
   useDefaults: (options: {
     config: {
@@ -98,6 +121,111 @@ export async function uploadAlipay(
       throw error
     throw new UploadError('支付宝小程序上传失败', error)
   }
+}
+
+export async function previewAlipay(
+  config: WotciConfig,
+  options: PreviewOptions = {},
+): Promise<PreviewResult<'alipay', AlipayPreviewRawResult>> {
+  const alipay = config.alipay
+  if (!alipay)
+    throw new PreviewError('缺少支付宝小程序预览配置（alipay）')
+
+  const cwd = options.cwd ?? process.cwd()
+  const previewConfig = alipay.preview
+  const projectPath = resolveFromCwd(cwd, alipay.projectPath)
+
+  if (!await isDirectory(projectPath))
+    throw new PreviewError(`支付宝小程序产物目录不存在：${projectPath}`)
+
+  const privateKey = await resolvePrivateKey(alipay, cwd).catch((error: unknown) => {
+    throw new PreviewError('支付宝小程序预览失败', error)
+  })
+  const runtime = resolveMinidevRuntime()
+
+  try {
+    runtime.useDefaults({
+      config: {
+        defaults: {
+          'alipay.authentication.privateKey': privateKey,
+          'alipay.authentication.toolId': alipay.toolId,
+        },
+      },
+    })
+
+    if (typeof runtime.minidev.preview !== 'function')
+      throw new PreviewError('minidev 未提供 preview 能力')
+
+    const raw = await runtime.minidev.preview({
+      appId: alipay.appid,
+      autoPush: previewConfig?.autoPush,
+      clientType: alipay.clientType ?? 'alipay',
+      ignoreHttpDomainCheck: previewConfig?.ignoreHttpDomainCheck,
+      ignoreWebViewDomainCheck: previewConfig?.ignoreWebViewDomainCheck,
+      page: options.pagePath ?? previewConfig?.page,
+      pageQuery: options.pageQuery ?? previewConfig?.pageQuery,
+      project: projectPath,
+      query: options.query ?? previewConfig?.query,
+      scene: options.scene !== undefined ? String(options.scene) : previewConfig?.scene,
+    }) as AlipayPreviewRawResult
+
+    if (!raw?.qrcodeUrl)
+      throw new PreviewError('支付宝预览未返回二维码地址')
+
+    const qrCode = await createAlipayQrCode(raw.qrcodeUrl, options.qrOutput, cwd)
+    const version = raw.version
+
+    return {
+      message: createAlipayPreviewMessage(qrCode, raw.qrcodeUrl, version),
+      platform: 'alipay',
+      qrCode,
+      raw,
+      ...(version ? { version } : {}),
+    }
+  }
+  catch (error) {
+    if (error instanceof PreviewError)
+      throw error
+    throw new PreviewError('支付宝小程序预览失败', error)
+  }
+}
+
+async function createAlipayQrCode(
+  qrcodeUrl: string,
+  qrOutput: string | undefined,
+  cwd: string,
+): Promise<PreviewResult['qrCode']> {
+  if (!qrOutput)
+    return { kind: 'url', url: qrcodeUrl, value: qrcodeUrl }
+
+  const outputPath = resolveFromCwd(cwd, qrOutput)
+
+  try {
+    const response = await fetch(qrcodeUrl)
+    if (!response.ok)
+      throw new Error(`下载二维码失败：HTTP ${response.status}`)
+
+    await mkdir(path.dirname(outputPath), { recursive: true })
+    await writeFile(outputPath, Buffer.from(await response.arrayBuffer()))
+
+    return { kind: 'file', path: outputPath, url: qrcodeUrl, value: outputPath }
+  }
+  catch (error) {
+    throw new PreviewError(`下载支付宝预览二维码失败：${qrcodeUrl}`, error)
+  }
+}
+
+function createAlipayPreviewMessage(
+  qrCode: PreviewResult['qrCode'],
+  qrcodeUrl: string,
+  version: string | undefined,
+): string {
+  const versionText = version ? `，版本：${version}` : ''
+
+  if (qrCode.kind === 'file')
+    return `支付宝小程序预览二维码已下载：${qrCode.path}，原始链接：${qrcodeUrl}${versionText}`
+
+  return `支付宝小程序预览二维码：${qrcodeUrl}${versionText}`
 }
 
 function resolveMinidevRuntime(): MinidevRuntime {

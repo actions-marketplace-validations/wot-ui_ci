@@ -5,6 +5,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
 const mocks = vi.hoisted(() => ({
   WeixinProject: vi.fn(),
+  weixinPreview: vi.fn(),
   weixinUpload: vi.fn(),
   alipayGetUploadedVersion: vi.fn(),
   alipayUpload: vi.fn(),
@@ -15,9 +16,11 @@ const mocks = vi.hoisted(() => ({
 
 vi.mock('miniprogram-ci', () => ({
   Project: mocks.WeixinProject,
+  preview: mocks.weixinPreview,
   upload: mocks.weixinUpload,
   default: {
     Project: mocks.WeixinProject,
+    preview: mocks.weixinPreview,
     upload: mocks.weixinUpload,
   },
 }))
@@ -265,5 +268,52 @@ describe('iDE 子命令参数', () => {
   it('帮助信息包含 IDE 子命令', () => {
     expect(createCliHelpText()).toContain('wotci open')
     expect(createCliHelpText()).toContain('--quit')
+  })
+})
+
+describe('预览子命令参数', () => {
+  it('解析 preview 与二维码选项', () => {
+    expect(parseCliArgs([
+      'preview',
+      '-p',
+      'weixin',
+      '--qr-format',
+      'image',
+      '--qr-output',
+      'out/qr.png',
+      '--page',
+      'pages/index/index',
+      '--page-query',
+      'a=1',
+      '--query',
+      'b=2',
+      '--scene',
+      '1011',
+      '--desc',
+      'preview',
+      '--robot',
+      '3',
+    ])).toEqual({
+      command: 'preview',
+      desc: 'preview',
+      page: 'pages/index/index',
+      pageQuery: 'a=1',
+      platform: 'weixin',
+      qrFormat: 'image',
+      qrOutput: 'out/qr.png',
+      query: 'b=2',
+      robot: 3,
+      scene: '1011',
+    })
+  })
+
+  it('非法 qr-format / robot 抛出错误', () => {
+    expect(() => parseCliArgs(['preview', '--qr-format', 'svg'])).toThrow('必须是 terminal、image 或 base64')
+    expect(() => parseCliArgs(['preview', '--robot', '31'])).toThrow('必须是 1-30 的整数')
+  })
+
+  it('帮助信息包含 preview 子命令', () => {
+    expect(createCliHelpText()).toContain('wotci preview')
+    expect(createCliHelpText()).toContain('--qr-format')
   })
 })

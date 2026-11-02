@@ -7,6 +7,7 @@
 - 支持微信、支付宝、钉钉三端小程序上传
 - 微信上传链路基于 `miniprogram-ci` 2.x
 - 提供 CLI（`wotci`）与 JS API（`upload`、`uploadPlatform`、`uploadWeixin` 等）
+- 支持微信、支付宝预览二维码（文件 / 终端 / URL）
 - 支持通过 CLI/JS API 打开、关闭微信与支付宝开发者工具
 - 支持 `wotci.config.ts/js/mjs/cjs/mts/cts` 配置文件，TS 配置在 CommonJS 项目中同样可用
 - 配置文件可以通过工厂函数读取 `process.env`，避免把密钥写死
@@ -62,6 +63,7 @@ npx wotci --platform weixin
 wotci --platform weixin
 wotci --platform alipay --config ./wotci.config.mjs
 wotci --platform dd
+wotci preview -p weixin
 wotci open -p weixin
 wotci close -p weixin --quit
 ```
@@ -74,6 +76,46 @@ wotci close -p weixin --quit
 | `-h, --help` | 查看帮助 |
 
 上传成功退出码为 `0`，失败为 `1`，适合直接在 CI 中使用。
+
+## 预览二维码
+
+```sh
+# 微信：默认生成 PNG 到 .wotci/preview/weixin.png
+wotci preview -p weixin
+
+# 指定页面、参数、场景值和备注
+wotci preview -p weixin \
+  --page pages/index/index \
+  --query "from=ci" \
+  --scene 1011 \
+  --desc "PR 预览"
+
+# 终端二维码（不落盘）
+wotci preview -p weixin --qr-format terminal
+
+# 支付宝：默认输出远程二维码 URL
+wotci preview -p alipay
+
+# 支付宝下载二维码到本地
+wotci preview -p alipay --qr-output dist/preview-alipay.png
+```
+
+| 参数 | 说明 |
+| --- | --- |
+| `--qr-format <type>` | `terminal`、`image`、`base64`，默认 `image`（微信） |
+| `--qr-output <file>` | 二维码输出路径；微信缺省 `.wotci/preview/weixin.png`，支付宝传入后会下载 |
+| `--page <path>` | 预览页面路径 |
+| `--page-query <str>` | 支付宝页面参数 |
+| `--query <str>` | 微信 `searchQuery` / 支付宝全局 `query` |
+| `--scene <value>` | 场景值；微信要求整数 |
+| `--desc <text>` | 微信预览备注 |
+| `--robot <1-30>` | 指定 CI 机器人 |
+
+平台差异：
+
+- **微信**：支持 `terminal` / `image` / `base64`；`image` 返回本地文件路径，`base64` 会把内容读入结果
+- **支付宝**：返回远程 `qrcodeUrl`；传 `--qr-output` 时下载到本地
+- **钉钉**：SDK 未暴露预览能力，返回明确的不支持错误
 
 ## 打开开发者工具
 
@@ -213,6 +255,7 @@ export default defineConfig(({ env, packageJson }) => ({
 | `robot` | `number` | 否 | 使用第几个 CI 机器人，1 ~ 30 |
 | `setting` | `object` | 否 | 上传编译设置，透传给 miniprogram-ci |
 | `ide` | `object` | 否 | 开发者工具配置：`cliPath`、`port`、`lang` |
+| `preview` | `object` | 否 | 预览配置：`qrcodeFormat`、`qrcodeOutputDest`、`pagePath`、`searchQuery`、`scene`、`robot` 等 |
 
 `setting` 常用字段：
 
@@ -243,6 +286,7 @@ export default defineConfig(({ env, packageJson }) => ({
 | `clientType` | `string` | 否 | 上传终端，默认 `alipay` |
 | `autoincrement` | `boolean` | 否 | 是否由平台自动递增版本号，默认 `false` |
 | `ide` | `object` | 否 | 开发者工具配置：`appPath` |
+| `preview` | `object` | 否 | 预览配置：`page`、`pageQuery`、`query`、`scene`、`autoPush` 等 |
 
 `clientType` 可选值：`alipay`、`ampe`、`amap`、`genie`、`alios`、`uc`、`quark`、`koubei`、`alipayiot`、`cainiao`、`alihealth`、`health`。
 
@@ -329,6 +373,33 @@ interface UploadResult {
 }
 ```
 
+### 生成预览二维码
+
+```ts
+import { preview } from '@wot-ui/ci'
+
+const result = await preview('weixin', {
+  cwd: process.cwd(),
+  qrFormat: 'image',
+  qrOutput: 'dist/preview.png',
+  pagePath: 'pages/index/index',
+  query: 'from=ci',
+  scene: 1011,
+})
+
+console.log(result.qrCode.kind) // 'file'
+console.log(result.qrCode.value) // /abs/dist/preview.png
+console.log(result.message)
+```
+
+支付宝返回远程链接：
+
+```ts
+const result = await preview('alipay', { cwd: process.cwd() })
+console.log(result.qrCode.kind) // 'url'
+console.log(result.qrCode.url)
+```
+
 ### 打开 / 关闭开发者工具
 
 ```ts
@@ -376,6 +447,7 @@ await wotci.upload('weixin')
 
 - 配置错误抛出 `ConfigError`
 - 上传错误抛出 `UploadError`，原始错误挂在 `cause` 上
+- 预览错误抛出 `PreviewError`；平台不支持预览时抛出 `PreviewUnsupportedError`
 - IDE 相关错误抛出 `IdeError` 的子类：`IdeNotFoundError`（找不到 IDE）、`IdeUnsupportedError`（平台不支持）、`IdeCommandError`（命令执行失败）
 - 以上错误都继承 `WotCIError`（带 `code` 字段）
 - `formatErrorReport(error)` 可以把 `cause` 链格式化为字符串数组
