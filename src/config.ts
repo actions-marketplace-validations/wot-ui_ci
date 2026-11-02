@@ -1,15 +1,30 @@
-import type { CIConfig, ConfigFactory, ConfigFactoryContext, LoadConfigOptions, LoadedConfig, PackageJsonConfig, UserConfig } from './types'
+import type {
+  ConfigFactory,
+  ConfigFactoryContext,
+  ConfigSource,
+  LoadConfigOptions,
+  LoadedConfig,
+  PackageJsonLike,
+  UserConfig,
+  WotciConfig,
+} from './types'
 import { readFile } from 'node:fs/promises'
 import path from 'node:path'
 import process from 'node:process'
 import { pathToFileURL } from 'node:url'
+import JSON5 from 'json5'
+import { require as tsxRequire } from 'tsx/cjs/api'
 import { tsImport } from 'tsx/esm/api'
 import { ConfigError } from './errors'
+import { isPlainObject, unwrapModuleExport } from './utils/module'
 import { exists, resolveFromCwd } from './utils/path'
 
 const PACKAGE_CONFIG_KEY = 'wotci'
+const LEGACY_PACKAGE_CONFIG_KEY = 'uni-mini-ci'
 const TYPESCRIPT_CONFIG_EXTENSIONS = new Set(['.ts', '.mts', '.cts'])
+const PLATFORM_KEYS = ['weixin', 'alipay', 'dingtalk'] as const
 
+/** 按优先级排列的配置文件名称 */
 export const CONFIG_FILE_NAMES = [
   'wotci.config.js',
   'wotci.config.mjs',
@@ -19,7 +34,10 @@ export const CONFIG_FILE_NAMES = [
   'wotci.config.cts',
 ] as const
 
-export function defineConfig(config: CIConfig): CIConfig
+/** 兼容 uni-mini-ci 的配置文件名称 */
+export const LEGACY_CONFIG_FILE_NAME = '.minicirc'
+
+export function defineConfig(config: WotciConfig): WotciConfig
 export function defineConfig(config: ConfigFactory): ConfigFactory
 export function defineConfig(config: UserConfig): UserConfig {
   return config
@@ -27,40 +45,41 @@ export function defineConfig(config: UserConfig): UserConfig {
 
 export async function loadConfig(options: LoadConfigOptions = {}): Promise<LoadedConfig> {
   const cwd = path.resolve(options.cwd ?? process.cwd())
-  const packageJson = await loadPackageJson(cwd)
-  const context: ConfigFactoryContext = {
-    cwd,
-    env: process.env,
-    packageJson,
-  }
+  const packageJson = await readPackageJson(cwd)
+  const context = createContext(cwd, packageJson)
 
-  if (options.config) {
+  if (options.config !== undefined) {
+    const config = await resolveConfigValue(options.config, context, '内联配置')
     return {
-      config: withPackageDefaults(await resolveConfigValue(options.config, context), packageJson),
+      config: withPackageDefaults(config, packageJson),
       cwd,
       packageJson,
       source: 'inline',
     }
   }
 
-  if (options.configFile) {
+  if (options.configFile !== undefined) {
+    if (!options.configFile.trim())
+      throw new ConfigError('configFile 不能为空')
     const filePath = resolveFromCwd(cwd, options.configFile)
-    return loadConfigFromFile(filePath, context, packageJson)
+    return loadModuleConfig(filePath, context)
   }
 
-  const jsConfigFile = await findExistingConfigFile(cwd, CONFIG_FILE_NAMES)
-  if (jsConfigFile)
-    return loadConfigFromFile(jsConfigFile, context, packageJson)
+  const discoveredFile = await findFirstConfigFile(cwd)
+  if (discoveredFile)
+    return loadModuleConfig(discoveredFile, context)
 
   const packageConfig = packageJson?.[PACKAGE_CONFIG_KEY]
-  if (packageConfig && isConfigObject(packageConfig)) {
-    return {
-      config: withPackageDefaults(packageConfig, packageJson),
-      cwd,
-      packageJson,
-      source: 'package-json',
-    }
-  }
+  if (packageConfig !== undefined)
+    return loadPackageConfig(packageConfig, 'package.json 中的 wotci 字段', cwd, packageJson, 'package-json')
+
+  const legacyFilePath = resolveFromCwd(cwd, LEGACY_CONFIG_FILE_NAME)
+  if (await exists(legacyFilePath))
+    return loadMinicirc(legacyFilePath, cwd, packageJson)
+
+  const legacyPackageConfig = packageJson?.[LEGACY_PACKAGE_CONFIG_KEY]
+  if (legacyPackageConfig !== undefined)
+    return loadPackageConfig(legacyPackageConfig, 'package.json 中的 uni-mini-ci 字段', cwd, packageJson, 'package-json')
 
   return {
     config: withPackageDefaults({}, packageJson),
@@ -70,34 +89,139 @@ export async function loadConfig(options: LoadConfigOptions = {}): Promise<Loade
   }
 }
 
-async function loadConfigFromFile(filePath: string, context: ConfigFactoryContext, packageJson?: PackageJsonConfig): Promise<LoadedConfig> {
-  const config = await loadModuleConfig(filePath, context)
-
+function createContext(cwd: string, packageJson?: PackageJsonLike): ConfigFactoryContext {
   return {
-    config: withPackageDefaults(config, packageJson),
-    cwd: context.cwd,
+    cwd,
+    env: process.env,
     packageJson,
-    source: 'js',
-    sourceFile: filePath,
   }
 }
 
-async function loadPackageJson(cwd: string): Promise<PackageJsonConfig | undefined> {
-  const packageJsonPath = resolveFromCwd(cwd, 'package.json')
-  if (!await exists(packageJsonPath))
-    return undefined
+async function loadModuleConfig(filePath: string, context: ConfigFactoryContext): Promise<LoadedConfig> {
+  if (!await exists(filePath))
+    throw new ConfigError(`配置文件不存在：${filePath}`)
 
   try {
-    const source = await readFile(packageJsonPath, 'utf8')
-    return JSON.parse(source) as PackageJsonConfig
+    const moduleExports = await loadModuleExports(filePath)
+    const configValue = unwrapModuleExport(moduleExports)
+    const config = await resolveConfigValue(configValue, context, `配置文件 ${filePath}`)
+
+    return {
+      config: withPackageDefaults(config, context.packageJson),
+      cwd: context.cwd,
+      packageJson: context.packageJson,
+      source: 'file',
+      sourceFile: filePath,
+    }
   }
   catch (error) {
-    throw new ConfigError(`读取 package.json 失败：${packageJsonPath}`, error)
+    if (error instanceof ConfigError)
+      throw error
+    throw new ConfigError(`加载配置文件失败：${filePath}`, error)
   }
 }
 
-async function findExistingConfigFile(cwd: string, names: readonly string[]): Promise<string | undefined> {
-  for (const name of names) {
+async function loadPackageConfig(
+  value: unknown,
+  label: string,
+  cwd: string,
+  packageJson: PackageJsonLike | undefined,
+  source: ConfigSource,
+): Promise<LoadedConfig> {
+  try {
+    const config = await resolveConfigValue(value, createContext(cwd, packageJson), label)
+    return {
+      config: withPackageDefaults(config, packageJson),
+      cwd,
+      packageJson,
+      source,
+    }
+  }
+  catch (error) {
+    if (error instanceof ConfigError)
+      throw error
+    throw new ConfigError(`解析 ${label} 失败`, error)
+  }
+}
+
+async function loadMinicirc(filePath: string, cwd: string, packageJson?: PackageJsonLike): Promise<LoadedConfig> {
+  try {
+    const source = await readFile(filePath, 'utf8')
+    const parsed = JSON5.parse(source) as unknown
+    const config = await resolveConfigValue(parsed, createContext(cwd, packageJson), `.minicirc 配置：${filePath}`)
+
+    return {
+      config: withPackageDefaults(config, packageJson),
+      cwd,
+      packageJson,
+      source: 'minicirc',
+      sourceFile: filePath,
+    }
+  }
+  catch (error) {
+    if (error instanceof ConfigError)
+      throw error
+    throw new ConfigError(`读取 .minicirc 失败：${filePath}`, error)
+  }
+}
+
+async function loadModuleExports(filePath: string): Promise<unknown> {
+  const extension = path.extname(filePath)
+
+  if (extension === '.cts')
+    return tsxRequire(filePath, import.meta.url)
+  if (TYPESCRIPT_CONFIG_EXTENSIONS.has(extension))
+    return tsImport(pathToFileURL(filePath).href, import.meta.url)
+
+  return import(pathToFileURL(filePath).href)
+}
+
+async function resolveConfigValue(value: unknown, context: ConfigFactoryContext, label: string): Promise<WotciConfig> {
+  let resolved: unknown
+
+  try {
+    resolved = typeof value === 'function'
+      ? await (value as ConfigFactory)(context)
+      : await value
+  }
+  catch (error) {
+    throw new ConfigError(`执行配置函数失败：${label}`, error)
+  }
+
+  if (!isPlainObject(resolved))
+    throw new ConfigError(`${label}必须导出配置对象，或导出返回配置对象的函数`)
+
+  return normalizeConfig(resolved as WotciConfig, label)
+}
+
+function normalizeConfig(config: WotciConfig, label: string): WotciConfig {
+  for (const key of PLATFORM_KEYS) {
+    const value = config[key]
+    if (value !== undefined && !isPlainObject(value))
+      throw new ConfigError(`${label}中的 ${key} 必须是对象`)
+  }
+
+  const { dd, ...rest } = config
+  const dingtalk = rest.dingtalk ?? dd
+
+  return dingtalk === undefined
+    ? rest
+    : { ...rest, dingtalk }
+}
+
+function withPackageDefaults(config: WotciConfig, packageJson?: PackageJsonLike): WotciConfig {
+  const result: WotciConfig = { ...config }
+
+  if (result.version === undefined)
+    result.version = packageJson?.version
+  if (result.desc === undefined)
+    result.desc = packageJson?.description
+
+  return result
+}
+
+async function findFirstConfigFile(cwd: string): Promise<string | undefined> {
+  for (const name of CONFIG_FILE_NAMES) {
     const candidate = resolveFromCwd(cwd, name)
     if (await exists(candidate))
       return candidate
@@ -106,51 +230,19 @@ async function findExistingConfigFile(cwd: string, names: readonly string[]): Pr
   return undefined
 }
 
-async function loadModuleConfig(filePath: string, context: ConfigFactoryContext): Promise<CIConfig> {
+async function readPackageJson(cwd: string): Promise<PackageJsonLike | undefined> {
+  const packageJsonPath = resolveFromCwd(cwd, 'package.json')
+  if (!await exists(packageJsonPath))
+    return undefined
+
   try {
-    const module = isTypeScriptConfigFile(filePath)
-      ? await tsImport(pathToFileURL(filePath).href, import.meta.url)
-      : await import(pathToFileURL(filePath).href)
-    const configValue = 'default' in module ? module.default : module
-    return await resolveConfigValue(configValue as UserConfig, context)
+    const source = await readFile(packageJsonPath, 'utf8')
+    const parsed = JSON.parse(source) as unknown
+    if (!isPlainObject(parsed))
+      throw new TypeError('package.json 必须是对象')
+    return parsed as PackageJsonLike
   }
   catch (error) {
-    throw new ConfigError(`加载配置模块失败：${filePath}`, error)
+    throw new ConfigError(`读取 package.json 失败：${packageJsonPath}`, error)
   }
-}
-
-async function resolveConfigValue(config: UserConfig, context: ConfigFactoryContext): Promise<CIConfig> {
-  const resolved = typeof config === 'function'
-    ? await config(context)
-    : config
-
-  if (!isConfigObject(resolved))
-    throw new ConfigError('配置解析结果必须是对象')
-
-  return normalizeConfig(resolved)
-}
-
-function withPackageDefaults(config: CIConfig, packageJson?: PackageJsonConfig): CIConfig {
-  return normalizeConfig({
-    ...config,
-    desc: config.desc ?? packageJson?.description,
-    version: config.version ?? packageJson?.version,
-  })
-}
-
-function isConfigObject(value: unknown): value is CIConfig {
-  return typeof value === 'object' && value !== null && !Array.isArray(value)
-}
-
-function normalizeConfig(config: CIConfig): CIConfig {
-  const dingtalk = config.dingtalk ?? config.dd
-  return {
-    ...config,
-    dd: undefined,
-    dingtalk,
-  }
-}
-
-function isTypeScriptConfigFile(filePath: string): boolean {
-  return TYPESCRIPT_CONFIG_EXTENSIONS.has(path.extname(filePath))
 }

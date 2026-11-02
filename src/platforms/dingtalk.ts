@@ -1,9 +1,9 @@
-import type { CIConfig, PlatformUploadResult, UploadContext } from '../types'
+import type { DingtalkUploadRawResult, UploadOptions, UploadResult, WotciConfig } from '../types'
 import process from 'node:process'
 import { sdk as opensdk } from 'dingtalk-miniapp-opensdk'
 import { UploadError } from '../errors'
 import { appendDesc } from '../messages'
-import { resolveFromCwd } from '../utils/path'
+import { isDirectory, resolveFromCwd } from '../utils/path'
 
 interface DingTalkUploadProgress {
   status?: string
@@ -13,46 +13,54 @@ interface DingTalkUploadProgress {
   }
 }
 
-interface DingTalkUploadRawResult {
-  packageVersion?: string
-}
-
-export async function uploadDingTalk(config: CIConfig, options: UploadContext = {}): Promise<PlatformUploadResult<DingTalkUploadRawResult>> {
-  if (!config.dingtalk)
+export async function uploadDingTalk(
+  config: WotciConfig,
+  options: UploadOptions = {},
+): Promise<UploadResult<'dingtalk', DingtalkUploadRawResult>> {
+  const dingtalk = config.dingtalk
+  if (!dingtalk)
     throw new UploadError('缺少钉钉小程序上传配置（dingtalk）')
-  if (!config.dingtalk.autoincrement && !config.version)
+  if (!dingtalk.autoincrement && !config.version)
     throw new UploadError('钉钉小程序关闭自动递增时必须提供 version')
 
   const cwd = options.cwd ?? process.cwd()
-  const projectPath = resolveFromCwd(cwd, config.dingtalk.projectPath)
+  const projectPath = resolveFromCwd(cwd, dingtalk.projectPath)
+
+  if (!await isDirectory(projectPath))
+    throw new UploadError(`钉钉小程序产物目录不存在：${projectPath}`)
+
   let progressVersion: string | undefined
+  let progressError: string | undefined
 
   try {
     opensdk.setConfig({
-      accessToken: config.dingtalk.token,
+      accessToken: dingtalk.token,
       appKey: '',
       appSecret: '',
       host: 'https://oapi.dingtalk.com',
     })
 
     const raw = await opensdk.miniUpload({
-      miniAppId: config.dingtalk.appid,
+      miniAppId: dingtalk.appid,
       onProgressUpdate: (progress: DingTalkUploadProgress) => {
         progressVersion = progress.data?.version ?? progressVersion
         if (progress.status === 'failed')
-          throw new UploadError(progress.data?.log ?? '钉钉小程序构建失败')
+          progressError = progress.data?.log ?? '钉钉小程序构建失败'
       },
-      packageVersion: config.dingtalk.autoincrement ? '' : config.version,
+      packageVersion: dingtalk.autoincrement ? '' : config.version,
       project: projectPath,
-    }) as DingTalkUploadRawResult
+    }) as DingtalkUploadRawResult
 
-    const version = raw.packageVersion ?? progressVersion ?? config.version ?? 'auto'
+    if (progressError)
+      throw new UploadError(progressError)
+
+    const version = raw?.packageVersion ?? progressVersion ?? config.version ?? 'auto'
 
     return {
       desc: config.desc,
       message: appendDesc(`钉钉小程序上传成功，版本：${version}`, config.desc),
       platform: 'dingtalk',
-      raw,
+      raw: raw ?? {},
       version,
     }
   }

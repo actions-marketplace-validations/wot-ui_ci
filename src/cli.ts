@@ -1,4 +1,4 @@
-import type { PlatformName } from './types'
+import type { PlatformInput } from './types'
 import process from 'node:process'
 import { loadConfig } from './config'
 import { ConfigError, formatErrorReport, formatErrorStack, UploadError } from './errors'
@@ -8,7 +8,7 @@ import {
   createCliHelpText,
   createCliUploadStartMessage,
 } from './messages'
-import { uploadPlatform } from './upload'
+import { normalizePlatform, uploadPlatform } from './upload'
 
 export interface RunCliOptions {
   cwd?: string
@@ -16,11 +16,11 @@ export interface RunCliOptions {
   stdout?: (message: string) => void
 }
 
-interface ParsedCliArgs {
+export interface ParsedCliArgs {
   configFile?: string
   cwd?: string
   help?: boolean
-  platform?: PlatformName | 'dd'
+  platform?: PlatformInput
 }
 
 export async function runCli(argv: string[] = process.argv.slice(2), options: RunCliOptions = {}): Promise<number> {
@@ -45,10 +45,11 @@ export async function runCli(argv: string[] = process.argv.slice(2), options: Ru
       configFile: args.configFile,
       cwd: args.cwd ?? options.cwd,
     })
+
     logger.info(createCliConfigLoadedMessage(loaded.source, loaded.sourceFile))
     logger.start(createCliUploadStartMessage(platform))
-    const result = await uploadPlatform(platform, loaded.config, { cwd: loaded.cwd })
 
+    const result = await uploadPlatform(platform, loaded.config, { cwd: loaded.cwd })
     logger.success(result.message)
     return 0
   }
@@ -78,7 +79,7 @@ export function parseCliArgs(argv: string[]): ParsedCliArgs {
         break
       case '--platform':
       case '-p':
-        parsed.platform = readOptionValue(argv, ++index, current) as ParsedCliArgs['platform']
+        parsed.platform = readOptionValue(argv, ++index, current) as PlatformInput
         break
       case '--config':
       case '-c':
@@ -100,14 +101,6 @@ function readOptionValue(argv: string[], index: number, optionName: string): str
   if (!value)
     throw new ConfigError(`参数缺少值：${optionName}`)
   return value
-}
-
-function normalizePlatform(platform: ParsedCliArgs['platform']): PlatformName {
-  if (platform === 'dd')
-    return 'dingtalk'
-  if (platform === 'weixin' || platform === 'alipay' || platform === 'dingtalk')
-    return platform
-  throw new ConfigError(`不支持的平台：${platform ?? 'unknown'}`)
 }
 
 function logError(
