@@ -1,3 +1,4 @@
+import path from 'node:path'
 import { describe, expect, it } from 'vitest'
 import { ConfigError, formatErrorReport, formatErrorStack, UploadError, WotCIError } from '../src/errors'
 import { createCliLogger } from '../src/logger'
@@ -114,8 +115,11 @@ describe('messages', () => {
 
 describe('path utils', () => {
   it('相对路径基于 cwd 解析，绝对路径原样返回', () => {
-    expect(resolveFromCwd('/tmp/project', 'dist/weixin')).toBe('/tmp/project/dist/weixin')
-    expect(resolveFromCwd('/tmp/project', '/opt/keys/private.key')).toBe('/opt/keys/private.key')
+    const cwd = path.resolve('/tmp/project')
+    const absoluteKey = path.resolve('/opt/keys/private.key')
+
+    expect(resolveFromCwd(cwd, 'dist/weixin')).toBe(path.resolve(cwd, 'dist/weixin'))
+    expect(resolveFromCwd(cwd, absoluteKey)).toBe(absoluteKey)
   })
 })
 
