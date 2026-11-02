@@ -34,6 +34,16 @@ export interface WeixinUploadSetting {
   [key: string]: unknown
 }
 
+/** 微信开发者工具配置 */
+export interface WeixinIdeConfig {
+  /** 微信开发者工具 CLI 路径，缺省时自动探测 */
+  cliPath?: string
+  /** IDE HTTP server 端口，对应 CLI 的 --port */
+  port?: number
+  /** IDE 语言，对应 CLI 的 --lang */
+  lang?: 'zh' | 'en'
+}
+
 /** 微信小程序配置 */
 export interface WeixinConfig {
   /** 小程序产物目录，相对路径基于 cwd 解析 */
@@ -50,6 +60,8 @@ export interface WeixinConfig {
   robot?: number
   /** 上传编译设置 */
   setting?: WeixinUploadSetting
+  /** 开发者工具相关配置 */
+  ide?: WeixinIdeConfig
 }
 
 /** 支付宝小程序终端类型 */
@@ -67,6 +79,12 @@ export type AlipayClientType
     | 'alihealth'
     | 'health'
 
+/** 支付宝开发者工具配置 */
+export interface AlipayIdeConfig {
+  /** 支付宝小程序开发者工具安装路径 */
+  appPath?: string
+}
+
 /** 支付宝小程序配置 */
 export interface AlipayConfig {
   /** 小程序产物目录，相对路径基于 cwd 解析 */
@@ -83,6 +101,8 @@ export interface AlipayConfig {
   clientType?: AlipayClientType
   /** 是否由平台自动递增版本号，默认 false */
   autoincrement?: boolean
+  /** 开发者工具相关配置 */
+  ide?: AlipayIdeConfig
 }
 
 /** 钉钉小程序类型 */
@@ -176,6 +196,46 @@ export interface LoadedConfig {
 export interface UploadOptions {
   /** 相对路径的解析目录，默认 process.cwd() */
   cwd?: string
+}
+
+/** 支持 IDE 操作的平台 */
+export type IdePlatform = Exclude<Platform, 'dingtalk'>
+
+export type IdeAction = 'open' | 'close' | 'quit'
+
+/** IDE 操作选项 */
+export interface IdeOptions extends UploadOptions {
+  /** 只打印将要执行的命令，不真正启动 IDE */
+  dryRun?: boolean
+  /** CI 环境下显式允许启动 GUI */
+  force?: boolean
+  /** IDE 语言 */
+  lang?: 'zh' | 'en'
+  /** IDE HTTP server 端口 */
+  port?: number
+  /** close 时退出整个 IDE，而不是只关闭项目 */
+  quit?: boolean
+}
+
+/** IDE 操作结果 */
+export interface IdeResult {
+  platform: IdePlatform
+  action: IdeAction
+  projectPath: string
+  executed: boolean
+  /** 实际执行或将要执行的命令 */
+  command?: string
+  args?: string[]
+  message: string
+  stdout?: string
+}
+
+/** JS 调用入口的 IDE 选项 */
+export interface IdeRequest extends IdeOptions {
+  /** 内联配置，传入后不再读取配置文件 */
+  config?: UserConfig
+  /** 显式指定的配置文件 */
+  configFile?: string
 }
 
 /** JS 调用入口的选项 */

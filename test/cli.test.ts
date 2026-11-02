@@ -222,3 +222,48 @@ describe('长参数形式', () => {
     expect(stdout.some(line => line.includes('[成功]'))).toBe(true)
   })
 })
+
+describe('iDE 子命令参数', () => {
+  it('解析 open 子命令与 IDE 选项', () => {
+    expect(parseCliArgs([
+      'open',
+      '-p',
+      'weixin',
+      '--port',
+      '9420',
+      '--lang',
+      'zh',
+      '--force',
+      '--dry-run',
+    ])).toEqual({
+      command: 'open',
+      dryRun: true,
+      force: true,
+      lang: 'zh',
+      platform: 'weixin',
+      port: 9420,
+    })
+  })
+
+  it('解析 close 子命令与 --quit', () => {
+    expect(parseCliArgs(['close', '-p', 'weixin', '--quit'])).toEqual({
+      command: 'close',
+      platform: 'weixin',
+      quit: true,
+    })
+  })
+
+  it('未知命令抛出错误', () => {
+    expect(() => parseCliArgs(['nope'])).toThrow('未知命令：nope')
+  })
+
+  it('非法 port / lang 抛出错误', () => {
+    expect(() => parseCliArgs(['open', '--port', '0'])).toThrow('必须是 1-65535 的整数')
+    expect(() => parseCliArgs(['open', '--lang', 'fr'])).toThrow('必须是 zh 或 en')
+  })
+
+  it('帮助信息包含 IDE 子命令', () => {
+    expect(createCliHelpText()).toContain('wotci open')
+    expect(createCliHelpText()).toContain('--quit')
+  })
+})

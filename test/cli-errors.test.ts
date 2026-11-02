@@ -3,6 +3,11 @@ import os from 'node:os'
 import path from 'node:path'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
+vi.mock('../src/ide', () => ({
+  closeIde: vi.fn(),
+  openIde: vi.fn(),
+}))
+
 vi.mock('../src/upload', () => ({
   normalizePlatform: (platform: string) => platform === 'dd' ? 'dingtalk' : platform,
   uploadPlatform: vi.fn(),

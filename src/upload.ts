@@ -1,31 +1,15 @@
 import type {
   AnyUploadResult,
-  Platform,
   PlatformInput,
   UploadOptions,
   UploadRequest,
   WotciConfig,
 } from './types'
 import { loadConfig } from './config'
-import { ConfigError } from './errors'
 import { uploadAlipay } from './platforms/alipay'
 import { uploadDingTalk } from './platforms/dingtalk'
 import { uploadWeixin } from './platforms/weixin'
-
-const PLATFORM_ALIASES: Record<string, Platform> = {
-  dd: 'dingtalk',
-  alipay: 'alipay',
-  dingtalk: 'dingtalk',
-  weixin: 'weixin',
-}
-
-/** 归一化平台名称，`dd` 会转换为 `dingtalk` */
-export function normalizePlatform(platform: string): Platform {
-  const normalized = PLATFORM_ALIASES[platform]
-  if (!normalized)
-    throw new ConfigError(`不支持的平台：${platform}`)
-  return normalized
-}
+import { normalizePlatform } from './utils/platform'
 
 /** 使用已加载的配置上传到指定平台 */
 export async function uploadPlatform(

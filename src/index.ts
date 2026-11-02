@@ -6,13 +6,21 @@ import {
 } from './config'
 import {
   ConfigError,
+  IdeCommandError,
+  IdeError,
+  IdeNotFoundError,
+  IdeUnsupportedError,
   UploadError,
   WotCIError,
 } from './errors'
+import { closeIde, openIde } from './ide'
+import { runAlipayIde } from './ide/alipay'
+import { runWeixinIde } from './ide/weixin'
 import { uploadAlipay } from './platforms/alipay'
 import { uploadDingTalk } from './platforms/dingtalk'
 import { uploadWeixin } from './platforms/weixin'
-import { normalizePlatform, upload, uploadPlatform } from './upload'
+import { upload, uploadPlatform } from './upload'
+import { normalizePlatform } from './utils/platform'
 import { compareVersion } from './utils/version'
 
 export {
@@ -23,8 +31,18 @@ export {
 }
 export {
   ConfigError,
+  IdeCommandError,
+  IdeError,
+  IdeNotFoundError,
+  IdeUnsupportedError,
   UploadError,
   WotCIError,
+}
+export {
+  closeIde,
+  openIde,
+  runAlipayIde,
+  runWeixinIde,
 }
 export {
   normalizePlatform,
@@ -39,6 +57,7 @@ export { compareVersion }
 export type {
   AlipayClientType,
   AlipayConfig,
+  AlipayIdeConfig,
   AlipayUploadRawResult,
   AnyUploadResult,
   CIConfig,
@@ -48,6 +67,11 @@ export type {
   DingtalkConfig,
   DingtalkProjectType,
   DingtalkUploadRawResult,
+  IdeAction,
+  IdeOptions,
+  IdePlatform,
+  IdeRequest,
+  IdeResult,
   LoadConfigOptions,
   LoadedConfig,
   MaybePromise,
@@ -60,6 +84,7 @@ export type {
   UploadResult,
   UserConfig,
   WeixinConfig,
+  WeixinIdeConfig,
   WeixinSubPackageInfo,
   WeixinUploadRawResult,
   WeixinUploadSetting,
@@ -69,13 +94,21 @@ export type {
 const wotci = {
   CONFIG_FILE_NAMES,
   ConfigError,
+  IdeCommandError,
+  IdeError,
+  IdeNotFoundError,
+  IdeUnsupportedError,
   LEGACY_CONFIG_FILE_NAME,
   UploadError,
   WotCIError,
+  closeIde,
   compareVersion,
   defineConfig,
   loadConfig,
   normalizePlatform,
+  openIde,
+  runAlipayIde,
+  runWeixinIde,
   upload,
   uploadAlipay,
   uploadDingTalk,

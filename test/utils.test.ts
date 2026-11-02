@@ -6,6 +6,7 @@ import {
   appendDesc,
   createCliConfigLoadedMessage,
   createCliHelpText,
+  createCliIdeStartMessage,
   createCliUploadStartMessage,
   getConfigSourceLabel,
   getPlatformLabel,
@@ -108,7 +109,7 @@ describe('messages', () => {
   })
 
   it('帮助信息包含平台说明', () => {
-    expect(createCliHelpText()).toContain('wotci --platform')
+    expect(createCliHelpText()).toContain('wotci upload --platform')
     expect(createCliHelpText()).toContain('--cwd')
   })
 })
@@ -178,5 +179,13 @@ describe('error.message 为空', () => {
     error.message = ''
 
     expect(formatErrorReport(error)).toEqual(['Error'])
+  })
+})
+
+describe('iDE CLI 提示语', () => {
+  it('覆盖 open / close / quit 三种动作', () => {
+    expect(createCliIdeStartMessage('weixin', 'open')).toBe('正在打开微信小程序开发者工具...')
+    expect(createCliIdeStartMessage('alipay', 'close')).toBe('正在关闭支付宝小程序项目...')
+    expect(createCliIdeStartMessage('weixin', 'quit')).toBe('正在退出微信小程序开发者工具...')
   })
 })

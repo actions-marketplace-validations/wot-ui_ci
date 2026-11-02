@@ -23,6 +23,34 @@ export class UploadError extends WotCIError {
   }
 }
 
+export class IdeError extends WotCIError {
+  constructor(message: string, code = 'IDE_ERROR', cause?: unknown) {
+    super(message, code, cause)
+    this.name = 'IdeError'
+  }
+}
+
+export class IdeNotFoundError extends IdeError {
+  constructor(message: string, cause?: unknown) {
+    super(message, 'IDE_NOT_FOUND', cause)
+    this.name = 'IdeNotFoundError'
+  }
+}
+
+export class IdeUnsupportedError extends IdeError {
+  constructor(message: string, cause?: unknown) {
+    super(message, 'IDE_UNSUPPORTED', cause)
+    this.name = 'IdeUnsupportedError'
+  }
+}
+
+export class IdeCommandError extends IdeError {
+  constructor(message: string, cause?: unknown) {
+    super(message, 'IDE_COMMAND_FAILED', cause)
+    this.name = 'IdeCommandError'
+  }
+}
+
 export function formatErrorReport(error: unknown): string[] {
   const lines: string[] = []
   const visited = new Set<unknown>()

@@ -7,6 +7,7 @@
 - 支持微信、支付宝、钉钉三端小程序上传
 - 微信上传链路基于 `miniprogram-ci` 2.x
 - 提供 CLI（`wotci`）与 JS API（`upload`、`uploadPlatform`、`uploadWeixin` 等）
+- 支持通过 CLI/JS API 打开、关闭微信与支付宝开发者工具
 - 支持 `wotci.config.ts/js/mjs/cjs/mts/cts` 配置文件，TS 配置在 CommonJS 项目中同样可用
 - 配置文件可以通过工厂函数读取 `process.env`，避免把密钥写死
 - 兼容 `uni-mini-ci` 的 `.minicirc`、`package.json` 中的 `uni-mini-ci` 字段以及 `dd` 平台别名
@@ -61,6 +62,8 @@ npx wotci --platform weixin
 wotci --platform weixin
 wotci --platform alipay --config ./wotci.config.mjs
 wotci --platform dd
+wotci open -p weixin
+wotci close -p weixin --quit
 ```
 
 | 参数 | 说明 |
@@ -71,6 +74,35 @@ wotci --platform dd
 | `-h, --help` | 查看帮助 |
 
 上传成功退出码为 `0`，失败为 `1`，适合直接在 CI 中使用。
+
+## 打开开发者工具
+
+除了 CI 上传/预览，`wotci` 也可以直接打开微信、支付宝开发者工具：
+
+```sh
+wotci open -p weixin
+wotci open -p weixin --port 9420 --lang zh
+wotci open -p alipay
+
+wotci close -p weixin
+wotci close -p weixin --quit
+```
+
+| 参数 | 说明 |
+| --- | --- |
+| `--dry-run` | 只打印将要执行的命令，不真正启动 IDE |
+| `--force` | 在 `CI=true` 环境下显式允许打开 GUI |
+| `--port <number>` | 微信开发者工具 HTTP server 端口 |
+| `--lang <zh 或 en>` | 微信开发者工具语言 |
+| `--quit` | `close` 时退出整个 IDE，而不是只关闭项目 |
+
+平台差异：
+
+- **微信**：通过开发者工具自带 CLI 执行 `open` / `close` / `quit`，会自动探测 macOS/Windows/Linux 的常见安装路径；也可以用 `weixin.ide.cliPath` 或环境变量 `WECHAT_DEVTOOLS_CLI` 指定
+- **支付宝**：通过 `minidev.startIde` 打开，`alipay.ide.appPath` 可指定 IDE 安装路径；暂不支持命令行关闭
+- **钉钉**：`dingtalk-miniapp-opensdk` 未暴露 IDE 能力，会返回明确的不支持错误
+
+为避免 CI 卡在 GUI 上，`CI=true` 时 `open` 默认拒绝执行；`--dry-run` 不受此限制。
 
 ## 配置
 
@@ -180,6 +212,7 @@ export default defineConfig(({ env, packageJson }) => ({
 | `ignores` | `string[]` | 否 | 上传时排除的目录或文件 |
 | `robot` | `number` | 否 | 使用第几个 CI 机器人，1 ~ 30 |
 | `setting` | `object` | 否 | 上传编译设置，透传给 miniprogram-ci |
+| `ide` | `object` | 否 | 开发者工具配置：`cliPath`、`port`、`lang` |
 
 `setting` 常用字段：
 
@@ -209,6 +242,7 @@ export default defineConfig(({ env, packageJson }) => ({
 | `privateKeyPath` | `string` | 二选一 | 私钥文件路径 |
 | `clientType` | `string` | 否 | 上传终端，默认 `alipay` |
 | `autoincrement` | `boolean` | 否 | 是否由平台自动递增版本号，默认 `false` |
+| `ide` | `object` | 否 | 开发者工具配置：`appPath` |
 
 `clientType` 可选值：`alipay`、`ampe`、`amap`、`genie`、`alios`、`uc`、`quark`、`koubei`、`alipayiot`、`cainiao`、`alihealth`、`health`。
 
@@ -295,6 +329,39 @@ interface UploadResult {
 }
 ```
 
+### 打开 / 关闭开发者工具
+
+```ts
+import { closeIde, openIde } from '@wot-ui/ci'
+
+const result = await openIde('weixin', {
+  cwd: process.cwd(),
+  port: 9420,
+  lang: 'zh',
+})
+
+console.log(result.message)
+// 已在微信开发者工具中打开：/path/to/dist/build/mp-weixin
+
+await closeIde('weixin', { cwd: process.cwd(), quit: true })
+```
+
+`openIde` 同样会加载 `wotci.config.*`，因此可以用配置里的 `projectPath` 和 `ide.cliPath`；也可以直接传内联配置：
+
+```ts
+await openIde('alipay', {
+  config: {
+    alipay: {
+      appid: '2021...',
+      toolId: '...',
+      privateKey: '...',
+      projectPath: 'dist/build/mp-alipay',
+      ide: { appPath: '/Applications/支付宝小程序开发者工具.app' },
+    },
+  },
+})
+```
+
 ### 默认导出
 
 ```ts
@@ -309,7 +376,8 @@ await wotci.upload('weixin')
 
 - 配置错误抛出 `ConfigError`
 - 上传错误抛出 `UploadError`，原始错误挂在 `cause` 上
-- 两者都继承 `WotCIError`（带 `code` 字段）
+- IDE 相关错误抛出 `IdeError` 的子类：`IdeNotFoundError`（找不到 IDE）、`IdeUnsupportedError`（平台不支持）、`IdeCommandError`（命令执行失败）
+- 以上错误都继承 `WotCIError`（带 `code` 字段）
 - `formatErrorReport(error)` 可以把 `cause` 链格式化为字符串数组
 
 CLI 会捕获这些错误、打印原因链并返回退出码 `1`，调用方也可以自行决定日志和退出策略。
