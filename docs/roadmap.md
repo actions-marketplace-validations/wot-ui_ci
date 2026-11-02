@@ -12,6 +12,7 @@
 | --- | --- | --- |
 | 上传 | `upload(options)` | `version`、`desc`、`robot`、`setting`、`threads`、`useCOS`、`onProgressUpdate`；返回 `subPackageInfo`、`pluginInfo` |
 | 预览 | `preview(options)` | `qrcodeFormat: terminal \| image \| base64`、`qrcodeOutputDest`、`pagePath`、`searchQuery`、`scene`、`robot`、`setting` |
+| 打开 / 关闭 IDE | 开发者工具 CLI：`open` / `close` / `quit` / `auto` | 需额外调用 IDE CLI，不是 miniprogram-ci API |
 | 最新版本 | `getLatestVersion({ project })` | `latestVersion`、`grayReleaseVersion` |
 | SourceMap | `getDevSourceMap(options)` | `robot`、`sourceMapSavePath`、`streaming` |
 | 构建 npm | `packNpm` / `packNpmManually` | 对应开发者工具「构建 npm」 |
@@ -26,6 +27,7 @@
 | --- | --- | --- |
 | 上传 | `minidev.upload(opts)` | `version`、`experience`、`deleteVersion`、`versionDescription`、`isGame`；返回 `version`、`experienceQrCodeUrl` |
 | 预览 | `minidev.preview(opts)` | `page`、`pageQuery`、`query`、`scene`、`autoPush`、`ignoreHttpDomainCheck`；返回 `qrcodeUrl`、`qrcodeSchema`、`version` |
+| 打开 IDE | `minidev.startIde(opts)` | `project`、`appPath`、`lite`、`projectType` |
 | 最新版本 | `minidev.app.getUploadedVersion(opts)` | 返回字符串版本号 |
 | 版本列表 | `minidev.app.getUploadedVersionList(opts)` | 版本、状态、创建时间、操作人 |
 | 删除版本 | `minidev.app.deleteVersion(opts)` | 危险操作 |
@@ -40,6 +42,7 @@
 | --- | --- | --- |
 | 上传 | `sdk.miniUpload(opts)` | 通过进度回调返回 `version`、`log` |
 | 预览 | 无 | SDK 未暴露预览能力 |
+| 打开 IDE / 模拟器 | 无 | 可另行集成 `dd`（DingTalk Design CLI）的 `dev` / 模拟器能力 |
 | 版本查询 / 列表 / 删除 | 无 | 只能从上传结果或进度回调拿版本号 |
 | NPM / SourceMap / 质量检查 | 无 | — |
 
@@ -58,6 +61,7 @@
 尚缺：
 
 - 预览（微信、支付宝）
+- 打开 / 关闭微信、支付宝开发者工具，自动化调试
 - 多平台批量执行
 - JSON 输出、dry-run、CI summary
 - 版本查询 / 版本策略
@@ -214,9 +218,104 @@ JSON 结构草案：
 }
 ```
 
+### v0.4.1 — IDE 与本地开发集成（P0）
+
+除了 CI 侧的上传/预览，日常开发里最高频的动作是「打开开发者工具」和「让 IDE 加载最新产物」。微信和支付宝都提供了可脚本化的 IDE 入口，可以一并收进 `wotci`。
+
+#### 3.4 打开 / 关闭开发者工具
+
+CLI：
+
+```sh
+wotci open -p weixin
+wotci open -p weixin --port 9420 --lang zh
+wotci open -p alipay
+wotci close -p weixin
+wotci ide status -p weixin
+```
+
+JS API：
+
+```ts
+import { closeIde, getIdeStatus, openIde } from '@wot-ui/ci'
+
+await openIde('weixin', { cwd: process.cwd(), port: 9420 })
+const status = await getIdeStatus('weixin')
+await closeIde('weixin')
+```
+
+平台能力：
+
+| 能力 | 微信 | 支付宝 | 钉钉 |
+| --- | --- | --- | --- |
+| 打开项目 | `cli open --project` | `minidev.startIde({ project })` | 无官方 SDK |
+| 关闭项目 / 退出 IDE | `cli close` / `cli quit` | 无直接 API | 无 |
+| 登录状态 | `cli islogin` / `cli login` | `minidev.login` | 无 |
+| 自动化调试 | `cli auto`（automation 端口） | `minidev.dev` + devtools | 无 |
+| 构建 npm | `cli build-npm` 或 `packNpm` | 无 | 无 |
+| 本地 dev server | IDE 自身 watch | `minidev.dev` / `devWebSimulator` | `dd` CLI 的 dev |
+
+实现要点：
+
+- 微信 CLI 路径按平台探测，常见位置：
+  - macOS：`/Applications/wechatwebdevtools.app/Contents/MacOS/cli`
+  - Windows：微信开发者工具安装目录下的 `cli.bat`
+  - 允许通过 `weixin.ide.cliPath` 显式覆盖
+- 支付宝通过 `minidev.startIde({ project, appPath })` 打开，`appPath` 可配置
+- 找不到 IDE 时返回可操作的错误，提示安装路径或 `ide.cliPath` 配置
+- 在 `CI=true` 环境下默认拒绝打开 GUI，需要 `--force` 才执行，避免 CI 卡死
+- `--dry-run` 只打印将要执行的命令，不真正启动 IDE
+
+配置：
+
+```ts
+weixin: {
+  // ...
+  ide: {
+    cliPath: '/Applications/wechatwebdevtools.app/Contents/MacOS/cli',
+    port: 9420,
+    lang: 'zh',
+  },
+},
+alipay: {
+  // ...
+  ide: {
+    appPath: '/Applications/支付宝小程序开发者工具.app',
+  },
+},
+```
+
+#### 3.5 自动化调试与本地预览
+
+```sh
+# 微信自动化端口，供 miniprogram-automator / E2E 使用
+wotci auto -p weixin --port 9420
+
+# 支付宝启动 dev server（minidev.dev），再基于 dev 产物做真机预览
+wotci dev -p alipay
+wotci dev-preview -p alipay --page pages/index/index
+
+# 打开 IDE 并让 IDE 自己生成预览（不经过 miniprogram-ci）
+wotci ide preview -p weixin --qr-output dist/ide-preview.png
+```
+
+这些能力与 `wotci preview` 的区别：
+
+- `wotci preview`：走 `miniprogram-ci` / `minidev`，不依赖 IDE，适合 CI
+- `wotci ide preview`：走 IDE CLI，依赖本机 IDE 登录态，适合本地开发
+- `wotci auto`：只负责开启自动化端口，不生成二维码
+
+验收：
+
+- `wotci open -p weixin` 能在 macOS / Windows 打开对应项目
+- `wotci open -p alipay` 能打开支付宝 IDE
+- IDE 未安装、路径错误、未登录时给出明确错误
+- CI 环境下默认不启动 GUI
+- IDE 相关测试通过 mock child_process，不依赖真实 GUI
+
 ### v0.5 — 版本、预算与体检（P1）
 
-#### 3.4 版本查询
+#### 3.6 版本查询
 
 ```sh
 wotci version latest -p weixin
@@ -228,7 +327,7 @@ wotci version list -p alipay
 - 支付宝：`getUploadedVersion` / `getUploadedVersionList`
 - 钉钉：不支持，返回 `UnsupportedCapabilityError`
 
-#### 3.5 版本策略
+#### 3.7 版本策略
 
 在现有 `version` + `autoincrement` 之上增加显式策略，避免平台差异：
 
@@ -246,7 +345,7 @@ versionStrategy:
 - `auto`：查询线上最新版本后本地递增，再把结果传给三个平台
 - 支付宝、钉钉仍可保留平台侧 `autoincrement: true`
 
-#### 3.6 包体积预算
+#### 3.8 包体积预算
 
 ```ts
 budgets: {
@@ -261,7 +360,7 @@ budgets: {
 - 超出预算时：`warnOnly` 仅告警，否则失败
 - CLI summary 与 JSON 都输出体积明细
 
-#### 3.7 支付宝体验版与版本管理
+#### 3.9 支付宝体验版与版本管理
 
 ```sh
 wotci experience set -p alipay --version 1.2.3
@@ -273,7 +372,7 @@ wotci version delete -p alipay --version 1.2.3 --yes
 - 删除 / 取消体验版属于破坏性操作，必须显式 `--yes`
 - 默认只打印计划，不执行
 
-#### 3.8 `wotci doctor`
+#### 3.10 `wotci doctor`
 
 ```sh
 wotci doctor
@@ -385,6 +484,16 @@ interface WotciConfig {
   budgets?: BudgetConfig
   versionStrategy?: VersionStrategy
 }
+
+interface WeixinIdeConfig {
+  cliPath?: string
+  port?: number
+  lang?: 'zh' | 'en'
+}
+
+interface AlipayIdeConfig {
+  appPath?: string
+}
 ```
 
 ## 5. 测试与验收
@@ -392,6 +501,7 @@ interface WotciConfig {
 - 保持 statements / branches / functions / lines 95% 以上阈值，新代码继续按 100% 目标补
 - 新增能力的单元测试全部 mock SDK，不依赖真实密钥
 - 预览测试覆盖：PNG 路径、URL、terminal、base64、不可写路径、平台能力缺失
+- IDE 测试覆盖：命令拼装、路径探测、未安装、CI 环境拒绝、子进程退出码
 - 批量测试覆盖：全成功、部分失败、并发、超时、JSON 输出快照
 - Windows 路径、二维码文件写入、GitHub summary 需要跨平台用例
 - 真实上传/预览只放在手动或 nightly job，PR 中不跑
@@ -404,15 +514,18 @@ interface WotciConfig {
 4. **包体积预算仅微信可用**：支付宝、钉钉上传结果不含包体积。
 5. **破坏性操作**：支付宝删除版本、取消体验版必须二次确认并支持 `--dry-run`。
 6. **`checkCodeQuality` / `cloud` 依赖官方服务**：需要真实项目验证后再决定是否纳入主线。
+7. **IDE 路径与登录态**：微信/支付宝 IDE 的 CLI 路径、版本和登录态因机器而异；需要路径探测 + 显式配置兜底。
+8. **GUI 副作用**：打开 IDE 会抢占焦点、启动 GUI，CI 中必须默认禁用；自动化端口只监听 localhost。
 
 ## 7. 建议实施顺序
 
 1. 平台适配器 + capabilities（不改行为，先重构）
 2. 预览（微信、支付宝）+ CLI/JS API
-3. 批量执行 + JSON + dry-run + summary
-4. doctor
-5. 版本查询 + 版本策略 + 预算
-6. npm 构建 / SourceMap / 产物检查
-7. Vite 插件 / GitHub Action
+3. 打开/关闭 IDE、自动化调试（本地开发集成）
+4. 批量执行 + JSON + dry-run + summary
+5. doctor
+6. 版本查询 + 版本策略 + 预算
+7. npm 构建 / SourceMap / 产物检查
+8. Vite 插件 / GitHub Action
 
 建议先做 **v0.4（预览 + 批量 + CI 输出）**，这是投入产出比最高的一组能力。
