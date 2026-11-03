@@ -106,6 +106,27 @@ export default defineConfig({
 
 版本策略会应用到 `upload`、`uploadMany`、`release`，只影响本次上传的版本号。
 
+## 配置体检（doctor）
+
+```sh
+wotci doctor
+wotci doctor --network
+wotci doctor --json
+```
+
+检查项：
+
+- Node.js 版本（>= 20）
+- 配置来源与多个配置文件冲突
+- 各平台必填字段（appid、toolId、token 等）
+- 产物目录、`project.config.json` / `app.json`
+- 私钥存在性、权限、PEM 格式
+- 微信/支付宝开发者工具路径
+- release 构建命令与 GitHub PR 评论环境
+- `--network` 时调用线上版本接口，校验 appid、私钥和 IP 白名单
+
+退出码：有 `error` 时为 `1`，只有 `warn` 时为 `0`。`--json` 输出结构化检查结果，适合 CI。
+
 ## 批量执行与 CI 输出
 
 上传和预览都支持多平台批量执行：

@@ -2,6 +2,7 @@ import type { IdeAction, PlatformInput } from './types'
 import process from 'node:process'
 import { previewMany, uploadMany } from './batch'
 import { loadConfig } from './config'
+import { runDoctor } from './doctor'
 import { ConfigError, formatErrorReport, formatErrorStack, WotCIError } from './errors'
 import { autoIde, closeIde, getIdeStatus, openIde, previewIde } from './ide'
 import { createCliLogger } from './logger'
@@ -27,7 +28,7 @@ export interface RunCliOptions {
   stdout?: (message: string) => void
 }
 
-export type CliCommand = 'upload' | 'release' | 'preview' | 'open' | 'close' | 'auto' | 'ide-status' | 'ide-preview' | 'version-latest' | 'version-list'
+export type CliCommand = 'upload' | 'release' | 'preview' | 'open' | 'close' | 'auto' | 'ide-status' | 'ide-preview' | 'version-latest' | 'version-list' | 'doctor'
 
 export interface ParsedCliArgs {
   all?: boolean
@@ -45,6 +46,7 @@ export interface ParsedCliArgs {
   infoOutput?: string
   json?: boolean
   lang?: 'zh' | 'en'
+  network?: boolean
   page?: string
   pageQuery?: string
   platform?: PlatformInput
@@ -62,7 +64,7 @@ export interface ParsedCliArgs {
   trustProject?: boolean
 }
 
-const CLI_COMMANDS = new Set<CliCommand>(['upload', 'release', 'preview', 'open', 'close', 'auto'])
+const CLI_COMMANDS = new Set<CliCommand>(['upload', 'release', 'preview', 'open', 'close', 'auto', 'doctor'])
 
 export async function runCli(argv: string[] = process.argv.slice(2), options: RunCliOptions = {}): Promise<number> {
   let logger = createCliLogger(options)
@@ -87,6 +89,38 @@ export async function runCli(argv: string[] = process.argv.slice(2), options: Ru
     if (args.help) {
       logger.log(createCliHelpText())
       return 0
+    }
+
+    if (command === 'doctor') {
+      const result = await runDoctor({
+        configFile: args.configFile,
+        cwd: args.cwd ?? options.cwd,
+        network: args.network,
+      })
+
+      if (args.json) {
+        const writeStdout = options.stdout ?? ((message: string) => process.stdout.write(message))
+        writeStdout(`${JSON.stringify({ command: 'doctor', schemaVersion: 1, ...result }, null, 2)}\n`)
+      }
+      else {
+        for (const check of result.checks) {
+          const line = `${check.status === 'ok' ? '✓' : check.status === 'warn' ? '!' : '✗'} ${check.title}${check.message ? `：${check.message}` : ''}`
+          if (check.status === 'error')
+            logger.error(line)
+          else
+            logger.log(line)
+
+          for (const detail of check.details ?? [])
+            logger.log(`  - ${detail}`)
+        }
+
+        if (result.ok)
+          logger.success('doctor 通过')
+        else
+          logger.error('doctor 未通过，请修复上面的错误')
+      }
+
+      return result.ok ? 0 : 1
     }
 
     if (!args.platform && command !== 'release' && !batchRequested) {
@@ -499,6 +533,9 @@ export function parseCliArgs(argv: string[]): ParsedCliArgs {
         break
       case '--concurrency':
         parsed.concurrency = readConcurrency(argv, ++index, current)
+        break
+      case '--network':
+        parsed.network = true
         break
       default:
         throw new ConfigError(`未知参数：${current}`)

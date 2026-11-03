@@ -489,6 +489,29 @@ export interface BatchResult<T = unknown> {
   results: Array<BatchItemResult<T>>
 }
 
+export type DoctorStatus = 'ok' | 'warn' | 'error'
+
+export interface DoctorCheck {
+  id: string
+  title: string
+  status: DoctorStatus
+  message?: string
+  details?: string[]
+}
+
+export interface DoctorResult {
+  ok: boolean
+  checks: DoctorCheck[]
+}
+
+/** doctor 请求 */
+export interface DoctorRequest extends UploadOptions {
+  config?: UserConfig
+  configFile?: string
+  /** 执行网络校验（版本查询 / key + IP 白名单） */
+  network?: boolean
+}
+
 /** 版本策略解析结果 */
 export interface VersionResolution {
   version?: string

@@ -54,6 +54,7 @@ export function createCliHelpText(): string {
     '  wotci release --platform <weixin,alipay,...> [options]',
     '  wotci version latest --platform <weixin|alipay> [--json]',
     '  wotci version list   --platform alipay [--json]',
+    '  wotci doctor [--network] [--json]',
     '  wotci preview --platform <weixin|alipay> [options]',
     '  wotci open   --platform <weixin|alipay> [options]',
     '  wotci close  --platform <weixin|alipay> [options]',
@@ -91,6 +92,7 @@ export function createCliHelpText(): string {
     '      --json             以 JSON 输出到 stdout，日志走 stderr',
     '      --summary <file>   写入 CI Markdown summary',
     '      --concurrency <n>  批量执行并发数，默认 1',
+    '      --network          doctor 时执行线上版本/密钥网络校验',
     '  -h, --help             查看帮助信息',
   ].join('\n')
 }

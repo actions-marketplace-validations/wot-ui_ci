@@ -5,6 +5,7 @@ import {
   LEGACY_CONFIG_FILE_NAME,
   loadConfig,
 } from './config'
+import { runDoctor } from './doctor'
 import {
   BuildError,
   ConfigError,
@@ -109,6 +110,10 @@ export type {
   DingtalkConfig,
   DingtalkProjectType,
   DingtalkUploadRawResult,
+  DoctorCheck,
+  DoctorRequest,
+  DoctorResult,
+  DoctorStatus,
   IdeAction,
   IdeOptions,
   IdePlatform,
@@ -199,6 +204,7 @@ const wotci = {
   renderBatchJson,
   renderBatchSummary,
   resolveVersion,
+  runDoctor,
   uploadMany,
   runAlipayIde,
   runWeixinIde,

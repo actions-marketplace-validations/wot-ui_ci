@@ -450,3 +450,18 @@ describe('version 参数', () => {
     expect(createCliHelpText()).toContain('wotci version latest')
   })
 })
+
+describe('doctor 参数', () => {
+  it('解析 doctor / --network / --json', () => {
+    expect(parseCliArgs(['doctor', '--network', '--json'])).toEqual({
+      command: 'doctor',
+      json: true,
+      network: true,
+    })
+  })
+
+  it('帮助信息包含 doctor', () => {
+    expect(createCliHelpText()).toContain('wotci doctor')
+    expect(createCliHelpText()).toContain('--network')
+  })
+})
