@@ -13,6 +13,7 @@ import { access, mkdir, readFile } from 'node:fs/promises'
 import path from 'node:path'
 import process from 'node:process'
 import * as weixinCIModule from 'miniprogram-ci'
+import { evaluateBudgets } from '../budget'
 import { PreviewError, UploadError, VersionError } from '../errors'
 import { appendDesc } from '../messages'
 import { isDirectory, resolveFromCwd } from '../utils/path'
@@ -138,12 +139,14 @@ export async function uploadWeixin(
     }) as WeixinUploadRawResult
 
     const sizes = getPackageSizes(raw?.subPackageInfo)
+    const budget = evaluateBudgets(sizes, config.budgets)
 
     return {
       desc: config.desc,
       message: createWeixinMessage(config.version, raw?.subPackageInfo, config.desc),
       platform: 'weixin',
       raw: raw ?? {},
+      ...(budget ? { budget } : {}),
       ...(sizes ? { sizes } : {}),
       version: config.version,
     }
@@ -214,6 +217,7 @@ export async function previewWeixin(
 
     const qrCode = await createQrCode(qrFormat, outputPath)
     const sizes = getPackageSizes(raw?.subPackageInfo)
+    const budget = evaluateBudgets(sizes, config.budgets)
 
     return {
       desc,
@@ -221,6 +225,7 @@ export async function previewWeixin(
       platform: 'weixin',
       qrCode,
       raw: raw ?? {},
+      ...(budget ? { budget } : {}),
       ...(sizes ? { sizes } : {}),
     }
   }

@@ -49,6 +49,7 @@ function serializeValue(value: unknown): unknown {
 
   if ('qrCode' in record) {
     return {
+      budget: record.budget,
       desc: record.desc,
       message: record.message,
       qrCode: record.qrCode,
@@ -58,6 +59,7 @@ function serializeValue(value: unknown): unknown {
   }
 
   return {
+    budget: record.budget,
     desc: record.desc,
     message: record.message,
     sizes: record.sizes,

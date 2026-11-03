@@ -1,6 +1,7 @@
 import type { IdeAction, PlatformInput } from './types'
 import process from 'node:process'
 import { previewMany, uploadMany } from './batch'
+import { formatBudgetReport, isBudgetFailure } from './budget'
 import { loadConfig } from './config'
 import { runDoctor } from './doctor'
 import { ConfigError, formatErrorReport, formatErrorStack, WotCIError } from './errors'
@@ -386,8 +387,13 @@ export async function runCli(argv: string[] = process.argv.slice(2), options: Ru
       packageJson: loaded.packageJson,
     })
     const result = await uploadPlatform(platform, applyVersion(loaded.config, resolution), { cwd: loaded.cwd })
+    const budgetFailed = isBudgetFailure(result.budget)
+
+    if (budgetFailed && result.budget)
+      logger.error(formatBudgetReport(result.budget))
+
     logger.success(result.message)
-    return 0
+    return budgetFailed ? 1 : 0
   }
   catch (error) {
     if (error instanceof WotCIError) {

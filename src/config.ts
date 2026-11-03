@@ -209,6 +209,9 @@ function normalizeConfig(config: WotciConfig, label: string): WotciConfig {
       throw new ConfigError(`${label}中的 ${key} 必须是对象`)
   }
 
+  if (config.budgets !== undefined && !isPlainObject(config.budgets))
+    throw new ConfigError(`${label}中的 budgets 必须是对象`)
+
   if (config.versionStrategy !== undefined) {
     if (!isPlainObject(config.versionStrategy))
       throw new ConfigError(`${label}中的 versionStrategy 必须是对象`)

@@ -8,6 +8,7 @@ import type {
 } from './types'
 import { readFile, stat } from 'node:fs/promises'
 import process from 'node:process'
+import { parseBudgetSize } from './budget'
 import { CONFIG_FILE_NAMES, LEGACY_CONFIG_FILE_NAME, loadConfig } from './config'
 import { getWeixinCliCandidates } from './ide/weixin'
 import { exists, isDirectory, resolveFromCwd } from './utils/path'
@@ -89,6 +90,7 @@ export async function runDoctor(request: DoctorRequest = {}): Promise<DoctorResu
     await checkDingtalk(config, cwd, add)
 
   checkRelease(config, add)
+  checkBudgets(config, add)
 
   if (request.network) {
     for (const platform of platforms) {
@@ -246,6 +248,24 @@ async function checkDingtalk(config: WotciConfig, cwd: string, add: AddCheck): P
 
   const projectPath = resolveFromCwd(cwd, dingtalk.projectPath)
   add(await isDirectory(projectPath) ? 'ok' : 'error', 'dingtalk-project', '钉钉产物目录', projectPath)
+}
+
+function checkBudgets(config: WotciConfig, add: AddCheck): void {
+  if (!config.budgets)
+    return
+
+  try {
+    const parts: string[] = []
+    if (config.budgets.total !== undefined)
+      parts.push(`总包 ${parseBudgetSize(config.budgets.total, 'total')} 字节`)
+    if (config.budgets.main !== undefined)
+      parts.push(`主包 ${parseBudgetSize(config.budgets.main, 'main')} 字节`)
+
+    add('ok', 'budgets', '包体积预算', parts.join('，') || '未设置上限')
+  }
+  catch (error) {
+    add('error', 'budgets', '包体积预算', error instanceof Error ? error.message : String(error))
+  }
 }
 
 function checkRelease(config: WotciConfig, add: AddCheck): void {

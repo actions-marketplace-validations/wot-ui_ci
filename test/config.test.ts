@@ -471,3 +471,14 @@ describe('versionStrategy 配置校验', () => {
     await expect(loadConfig({ cwd: notObject })).rejects.toThrow('versionStrategy 必须是对象')
   })
 })
+
+describe('budgets 配置校验', () => {
+  it('budgets 不是对象时抛出 ConfigError', async () => {
+    const cwd = await createProject({
+      type: 'module',
+      files: { 'wotci.config.js': `export default { budgets: '2MB' }\n` },
+    })
+
+    await expect(loadConfig({ cwd })).rejects.toThrow('budgets 必须是对象')
+  })
+})

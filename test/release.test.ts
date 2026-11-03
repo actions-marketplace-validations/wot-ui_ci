@@ -293,3 +293,67 @@ describe('release PR 评论', () => {
     expect(mocks.upsertComment).not.toHaveBeenCalled()
   })
 })
+
+describe('release 预算与体积趋势', () => {
+  it('超限时标记失败并保留体积', async () => {
+    const cwd = await createProject()
+    mocks.uploadPlatform.mockResolvedValueOnce({
+      budget: { ok: false, violations: [{ actual: 4096, limit: 2048, metric: 'total' }], warnOnly: false },
+      message: '微信上传成功',
+      platform: 'weixin',
+      raw: {},
+      sizes: { main: 1024, total: 4096 },
+      version: '1.0.0',
+    })
+
+    const result = await release({
+      config: { version: '1.0.0', weixin: { appid: 'wx', privateKeyPath: 'key', projectPath: 'dist' } },
+      cwd,
+      platforms: ['weixin'],
+    })
+
+    expect(result.ok).toBe(false)
+    expect(result.platforms[0]).toMatchObject({
+      error: { code: 'BUDGET_EXCEEDED' },
+      ok: false,
+      sizes: { total: 4096 },
+    })
+  })
+
+  it('与历史记录对比生成 trend', async () => {
+    const cwd = await createProject()
+    await mkdir(path.join(cwd, '.wotci'), { recursive: true })
+    await writeFile(path.join(cwd, '.wotci/history.json'), JSON.stringify({
+      records: [{
+        build: { commands: [], durationMs: 0, ok: true, skipped: true },
+        createdAt: '2026-01-01T00:00:00.000Z',
+        durationMs: 1,
+        id: 'old',
+        ok: true,
+        platforms: [{ durationMs: 1, message: 'ok', ok: true, platform: 'weixin', sizes: { main: 1024, total: 2048 } }],
+        version: '0.9.0',
+      }],
+      version: 1,
+    }))
+    mocks.uploadPlatform.mockResolvedValueOnce({
+      message: '微信上传成功',
+      platform: 'weixin',
+      raw: {},
+      sizes: { main: 1024, total: 4096 },
+      version: '1.0.0',
+    })
+
+    const result = await release({
+      config: { version: '1.0.0', weixin: { appid: 'wx', privateKeyPath: 'key', projectPath: 'dist' } },
+      cwd,
+      platforms: ['weixin'],
+    })
+
+    expect(result.platforms[0].trend).toEqual({
+      deltaMain: 0,
+      deltaTotal: 2048,
+      previousMain: 1024,
+      previousTotal: 2048,
+    })
+  })
+})

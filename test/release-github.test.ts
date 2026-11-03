@@ -192,6 +192,22 @@ describe('renderReleaseComment', () => {
     expect(body).toContain('未知错误')
   })
 
+  it('体积趋势展示 +/- 差值', () => {
+    const result = createResult({
+      platforms: [{
+        durationMs: 1000,
+        message: 'ok',
+        ok: true,
+        platform: 'weixin',
+        sizes: { main: 1024 * 1024, total: 3 * 1024 * 1024 },
+        trend: { deltaMain: 0, deltaTotal: 1024 * 1024, previousMain: 1024 * 1024, previousTotal: 2 * 1024 * 1024 },
+        version: '1.0.0',
+      }],
+    })
+
+    expect(renderReleaseComment(result)).toContain('3.00MB (+1.00MB)')
+  })
+
   it('没有 git 信息时不输出提交行', () => {
     const body = renderReleaseComment(createResult({ git: undefined }))
 

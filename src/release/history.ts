@@ -21,7 +21,7 @@ export async function appendReleaseHistory(
   options: AppendHistoryOptions,
 ): Promise<string> {
   const filePath = path.resolve(options.cwd, options.file)
-  const records = await readHistory(filePath)
+  const records = await readReleaseHistory({ cwd: options.cwd, file: options.file })
   const limit = Math.max(1, options.limit ?? 50)
   const next: ReleaseHistoryFile = {
     records: [...records, record].slice(-limit),
@@ -37,7 +37,8 @@ export async function appendReleaseHistory(
   return filePath
 }
 
-async function readHistory(filePath: string): Promise<ReleaseHistoryRecord[]> {
+export async function readReleaseHistory(options: AppendHistoryOptions): Promise<ReleaseHistoryRecord[]> {
+  const filePath = path.resolve(options.cwd, options.file)
   let source: string
 
   try {

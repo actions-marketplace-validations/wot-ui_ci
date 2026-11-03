@@ -7,6 +7,7 @@ const mocks = vi.hoisted(() => ({
   previewMany: vi.fn(),
   release: vi.fn(),
   uploadMany: vi.fn(),
+  uploadPlatform: vi.fn(),
 }))
 
 vi.mock('../src/batch', () => ({
@@ -31,7 +32,7 @@ vi.mock('../src/preview', () => ({
 }))
 
 vi.mock('../src/upload', () => ({
-  uploadPlatform: vi.fn(),
+  uploadPlatform: mocks.uploadPlatform,
 }))
 
 const { runCli } = await import('../src/cli')
@@ -257,5 +258,25 @@ describe('runCli batch 补充分支', () => {
 
     expect(stdout.some(line => line.includes('[成功] [weixin] 成功'))).toBe(true)
     expect(stderr.some(line => line.includes('[失败] [alipay] 失败'))).toBe(true)
+  })
+})
+
+describe('单平台预算失败', () => {
+  it('预算超限时退出码为 1 并打印原因', async () => {
+    const cwd = await createProject()
+    const { stderr, writers } = createWriters()
+    mocks.uploadPlatform.mockResolvedValueOnce({
+      budget: { ok: false, violations: [{ actual: 4096, limit: 1024, metric: 'total' }], warnOnly: false },
+      message: '微信上传成功',
+      platform: 'weixin',
+      raw: {},
+      sizes: { total: 4096 },
+      version: '1.0.0',
+    })
+
+    const exitCode = await runCli(['upload', '-p', 'weixin'], { cwd, ...writers })
+
+    expect(exitCode).toBe(1)
+    expect(stderr.some(line => line.includes('总包 4KB 超出预算 1KB'))).toBe(true)
   })
 })

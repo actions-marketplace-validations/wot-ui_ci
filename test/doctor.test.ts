@@ -353,3 +353,21 @@ describe('doctor 补充检查', () => {
     }))
   })
 })
+
+describe('doctor 预算检查', () => {
+  it('合法预算通过，非法预算报错', async () => {
+    const cwd = await createFixture()
+
+    const ok = await runDoctor({
+      config: { ...createConfig(cwd), budgets: { main: '1MB', total: '2MB' } },
+      cwd,
+    })
+    expect(ok.checks).toContainEqual(expect.objectContaining({ id: 'budgets', status: 'ok' }))
+
+    const bad = await runDoctor({
+      config: { ...createConfig(cwd), budgets: { total: 'huge' } },
+      cwd,
+    })
+    expect(bad.checks).toContainEqual(expect.objectContaining({ id: 'budgets', status: 'error' }))
+  })
+})

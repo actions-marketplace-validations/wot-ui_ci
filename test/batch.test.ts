@@ -205,3 +205,30 @@ describe('previewMany', () => {
     expect(result.results[0].result).toMatchObject({ platform: 'weixin' })
   })
 })
+
+describe('批量预算失败', () => {
+  it('预算超限时平台标记失败但保留结果', async () => {
+    const cwd = await createFixture()
+    mocks.uploadPlatform.mockResolvedValueOnce({
+      budget: {
+        ok: false,
+        violations: [{ actual: 4096, limit: 1024, metric: 'total' }],
+        warnOnly: false,
+      },
+      message: '微信上传成功',
+      platform: 'weixin',
+      raw: {},
+      sizes: { total: 4096 },
+      version: '1.0.0',
+    })
+
+    const result = await uploadMany({ config: createConfig(), cwd, platforms: ['weixin'] })
+
+    expect(result.ok).toBe(false)
+    expect(result.results[0]).toMatchObject({
+      error: { code: 'BUDGET_EXCEEDED' },
+      ok: false,
+      result: { budget: { ok: false } },
+    })
+  })
+})

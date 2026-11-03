@@ -56,6 +56,7 @@ vi.mock('dingtalk-miniapp-opensdk', () => ({
 }))
 
 const {
+  previewWeixin,
   upload,
   uploadAlipay,
   uploadDingTalk,
@@ -822,5 +823,43 @@ describe('默认 cwd 与空返回值', () => {
 
     expect(result.raw).toEqual({})
     expect(result.version).toBe('1.0.2')
+  })
+})
+
+describe('包体积预算', () => {
+  it('微信上传结果附带预算报告', async () => {
+    const { cwd } = await createFixture()
+
+    const result = await uploadWeixin({
+      budgets: { main: '512B', total: '1KB' },
+      version: '1.0.0',
+      ...weixinConfig(),
+    }, { cwd })
+
+    expect(result.budget).toMatchObject({
+      ok: false,
+      violations: expect.arrayContaining([
+        expect.objectContaining({ metric: 'total' }),
+        expect.objectContaining({ metric: 'main' }),
+      ]),
+    })
+  })
+
+  it('预览结果附带预算报告', async () => {
+    const { cwd } = await createFixture()
+    mocks.weixinPreview.mockResolvedValueOnce({
+      subPackageInfo: [{ name: '__FULL__', size: 4096 }],
+    })
+
+    const result = await previewWeixin({
+      budgets: { total: '1KB' },
+      weixin: {
+        appid: 'wx123',
+        privateKeyPath: 'keys/weixin.key',
+        projectPath: 'dist/weixin',
+      },
+    }, { cwd })
+
+    expect(result.budget).toMatchObject({ ok: false })
   })
 })

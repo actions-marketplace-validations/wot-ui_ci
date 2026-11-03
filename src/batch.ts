@@ -8,6 +8,7 @@ import type {
   PlatformInput,
   PlatformPlan,
 } from './types'
+import { formatBudgetReport, isBudgetFailure } from './budget'
 import { loadConfig } from './config'
 import { ConfigError } from './errors'
 import { planPlatform } from './plan'
@@ -89,9 +90,21 @@ async function runBatch<TResult>(
         ? await uploadPlatform(platform, config, { cwd })
         : await previewPlatform(platform, config, request)) as TResult
 
+      const budgetFailed = isBudgetFailure(
+        (result as { budget?: Parameters<typeof isBudgetFailure>[0] }).budget,
+      )
+
       return {
         durationMs: Date.now() - itemStartedAt,
-        ok: true,
+        ...(budgetFailed
+          ? {
+              error: {
+                code: 'BUDGET_EXCEEDED',
+                message: formatBudgetReport((result as { budget: NonNullable<Parameters<typeof isBudgetFailure>[0]> }).budget),
+              },
+            }
+          : {}),
+        ok: !budgetFailed,
         platform,
         result,
       }

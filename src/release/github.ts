@@ -94,8 +94,8 @@ export function renderReleaseComment(
       escapeCell(item.platform),
       item.ok ? '✅' : '❌',
       escapeCell(item.version ?? '-'),
-      item.sizes?.total ? formatSize(item.sizes.total) : '-',
-      item.sizes?.main ? formatSize(item.sizes.main) : '-',
+      item.sizes?.total ? formatSizeCell(item.sizes.total, item.trend?.deltaTotal) : '-',
+      item.sizes?.main ? formatSizeCell(item.sizes.main, item.trend?.deltaMain) : '-',
       `${(item.durationMs / 1000).toFixed(1)}s`,
     ].join(' | ').replace(/^/, '| ').replace(/$/, ' |'))
   }
@@ -188,6 +188,13 @@ export async function upsertReleaseComment(
 
 function formatSize(size: number): string {
   return `${(size / 1024 / 1024).toFixed(2)}MB`
+}
+
+function formatSizeCell(size: number, delta: number | undefined): string {
+  if (delta === undefined || delta === 0)
+    return formatSize(size)
+
+  return `${formatSize(size)} (${delta > 0 ? '+' : '-'}${formatSize(Math.abs(delta))})`
 }
 
 function escapeCell(value: string): string {

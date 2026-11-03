@@ -9,6 +9,7 @@ import type {
   WotciConfig,
 } from '../types'
 import { randomUUID } from 'node:crypto'
+import { formatBudgetReport, isBudgetFailure } from '../budget'
 import { loadConfig } from '../config'
 import { ConfigError } from '../errors'
 import { uploadPlatform } from '../upload'
@@ -18,7 +19,7 @@ import { applyVersion, resolveVersion } from '../version-strategy'
 import { runShellCommand } from './command'
 import { readGitInfo } from './git'
 import { detectGitHubPullRequestContext, renderReleaseComment, upsertReleaseComment } from './github'
-import { appendReleaseHistory } from './history'
+import { appendReleaseHistory, readReleaseHistory } from './history'
 
 const PLATFORM_ORDER: Platform[] = ['weixin', 'alipay', 'dingtalk']
 
@@ -94,11 +95,15 @@ export async function release(request: ReleaseRequest = {}): Promise<ReleaseResu
   }
 
   const historyEnabled = request.history ?? releaseConfig.history ?? true
+  const historyFile = request.historyFile ?? releaseConfig.historyFile ?? '.wotci/history.json'
+
   if (historyEnabled) {
     try {
+      const previous = await readReleaseHistory({ cwd, file: historyFile }).catch(() => [])
+      attachSizeTrend(platformResults, previous)
       result.historyFile = await appendReleaseHistory(createHistoryRecord(result), {
         cwd,
-        file: request.historyFile ?? releaseConfig.historyFile ?? '.wotci/history.json',
+        file: historyFile,
         limit: releaseConfig.historyLimit ?? 50,
       })
     }
@@ -183,12 +188,23 @@ async function uploadOne(
   try {
     const uploaded = await uploadPlatform(platform, config, { cwd })
 
+    const budgetFailed = isBudgetFailure(uploaded.budget)
+
     return {
       durationMs: Date.now() - startedAt,
       message: uploaded.message,
-      ok: true,
+      ok: !budgetFailed,
       platform,
+      ...(uploaded.budget ? { budget: uploaded.budget } : {}),
       ...(uploaded.sizes ? { sizes: uploaded.sizes } : {}),
+      ...(budgetFailed && uploaded.budget
+        ? {
+            error: {
+              code: 'BUDGET_EXCEEDED',
+              message: formatBudgetReport(uploaded.budget),
+            },
+          }
+        : {}),
       version: uploaded.version,
     }
   }
@@ -201,6 +217,40 @@ async function uploadOne(
       message: serialized.message,
       ok: false,
       platform,
+    }
+  }
+}
+
+function attachSizeTrend(
+  results: ReleasePlatformResult[],
+  records: ReleaseHistoryRecord[],
+): void {
+  for (const item of results) {
+    if (!item.sizes)
+      continue
+
+    let previous: ReleasePlatformResult | undefined
+
+    for (let index = records.length - 1; index >= 0; index--) {
+      const match = records[index].platforms.find(platform => platform.platform === item.platform && platform.sizes)
+      if (match) {
+        previous = match
+        break
+      }
+    }
+
+    if (!previous?.sizes)
+      continue
+
+    item.trend = {
+      ...(previous.sizes.total !== undefined ? { previousTotal: previous.sizes.total } : {}),
+      ...(previous.sizes.main !== undefined ? { previousMain: previous.sizes.main } : {}),
+      ...(item.sizes.total !== undefined && previous.sizes.total !== undefined
+        ? { deltaTotal: item.sizes.total - previous.sizes.total }
+        : {}),
+      ...(item.sizes.main !== undefined && previous.sizes.main !== undefined
+        ? { deltaMain: item.sizes.main - previous.sizes.main }
+        : {}),
     }
   }
 }

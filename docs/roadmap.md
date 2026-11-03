@@ -328,7 +328,7 @@ wotci ide preview -p weixin --qr-output dist/ide-preview.png
 
 ### v0.5 — 版本、预算与体检（P1）
 
-> 状态：版本查询/策略、doctor 已实现；包体积预算、支付宝体验版管理待做。
+> 状态：版本查询/策略、doctor、包体积预算已实现；支付宝体验版管理待做。
 
 #### 3.6 版本查询
 

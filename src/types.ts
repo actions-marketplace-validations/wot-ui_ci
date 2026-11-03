@@ -189,8 +189,32 @@ export interface WotciConfig {
   dd?: DingtalkConfig
   /** release 编排配置 */
   release?: ReleaseConfig
+  /** 包体积预算，仅微信可计算 */
+  budgets?: BudgetConfig
   /** 版本号策略，不会修改 package.json */
   versionStrategy?: VersionStrategy
+}
+
+/** 包体积预算，仅微信 result.sizes 可用 */
+export interface BudgetConfig {
+  /** 总包上限，如 '3MB' 或字节数 */
+  total?: string | number
+  /** 主包上限，如 '1.5MB' 或字节数 */
+  main?: string | number
+  /** 超限只告警，不判定失败 */
+  warnOnly?: boolean
+}
+
+export interface BudgetViolation {
+  metric: 'total' | 'main'
+  limit: number
+  actual: number
+}
+
+export interface BudgetReport {
+  ok: boolean
+  warnOnly: boolean
+  violations: BudgetViolation[]
 }
 
 export type VersionBump = 'major' | 'minor' | 'patch'
@@ -398,6 +422,13 @@ export interface ReleasePlatformResult {
     total?: number
     main?: number
   }
+  budget?: BudgetReport
+  trend?: {
+    previousTotal?: number
+    previousMain?: number
+    deltaTotal?: number
+    deltaMain?: number
+  }
   message: string
   durationMs: number
   error?: {
@@ -596,6 +627,8 @@ export interface UploadResult<TPlatform extends Platform = Platform, TRaw = unkn
     total?: number
     main?: number
   }
+  /** 包体积预算检查结果 */
+  budget?: BudgetReport
   /** SDK 原始返回值 */
   raw: TRaw
 }
@@ -648,6 +681,8 @@ export interface PreviewResult<TPlatform extends Platform = Platform, TRaw = unk
     total?: number
     main?: number
   }
+  /** 包体积预算检查结果 */
+  budget?: BudgetReport
   /** SDK 原始返回值 */
   raw: TRaw
 }

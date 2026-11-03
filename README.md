@@ -7,6 +7,7 @@
 - 支持微信、支付宝、钉钉三端小程序上传
 - 微信上传链路基于 `miniprogram-ci` 2.x
 - 提供 CLI（`wotci`）与 JS API（`upload`、`uploadPlatform`、`uploadWeixin` 等）
+- 支持包体积预算与发布体积趋势
 - 支持 `release` 一步完成构建、多平台上传、历史记录与 PR 评论
 - 支持微信、支付宝预览二维码（文件 / 终端 / URL）
 - 支持通过 CLI/JS API 打开、关闭微信与支付宝开发者工具
@@ -105,6 +106,31 @@ export default defineConfig({
 - `--dry-run` 时 `auto` 不发起网络请求，使用 `package.json` 版本递增
 
 版本策略会应用到 `upload`、`uploadMany`、`release`，只影响本次上传的版本号。
+
+## 包体积预算
+
+```ts
+export default defineConfig({
+  budgets: {
+    total: '3MB',
+    main: '1.5MB',
+    warnOnly: false,
+  },
+})
+```
+
+- 数据来源：微信 `subPackageInfo`（总包、主包）
+- 支付宝、钉钉不返回包体积，会自动跳过
+- 超限且 `warnOnly: false`：该平台判定失败，退出码 `1`
+- `warnOnly: true`：只输出告警
+- `upload` / `uploadMany` / `release` / `preview` 均会附带 `budget` 结果
+- `release` 会读取历史记录，在 PR 评论里展示体积增减
+
+示例输出：
+
+```text
+总包 4.00MB 超出预算 3MB；主包 2.00MB 超出预算 1.5MB
+```
 
 ## 配置体检（doctor）
 
