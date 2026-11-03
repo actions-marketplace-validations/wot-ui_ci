@@ -1,4 +1,11 @@
-name: Upload Playground Mini Program
+name: Upload Playground
+
+# 用仓库内的 playground 项目端到端验证 wot-ui-ci：
+#   1. 构建 CLI（dist）与 playground 小程序产物
+#   2. 用 doctor / --dry-run 校验配置、产物与私钥
+#   3. 真正调用微信 miniprogram-ci 上传，并把 JSON 与 Job Summary 存档
+#
+# push 到 main 时只跑 dry-run 冒烟测试，避免每个提交都占用一个上传版本。
 
 on:
   workflow_dispatch:
@@ -6,59 +13,315 @@ on:
       platform:
         description: Target platform
         required: true
+        default: weixin
         type: choice
         options:
           - weixin
           - alipay
           - dingtalk
       version:
-        description: Upload version override
+        description: Upload version (defaults to playground/package.json)
         required: false
         type: string
       desc:
-        description: Upload description override
+        description: Upload description (defaults to "playground <commit>")
         required: false
         type: string
+      robot:
+        description: WeChat CI robot number (1-30)
+        required: false
+        default: '1'
+        type: string
+      dry_run:
+        description: Only validate config and build output, do not upload
+        required: false
+        default: false
+        type: boolean
+
+  push:
+    branches:
+      - main
+    paths:
+      - 'src/**'
+      - 'scripts/**'
+      - 'playground/**'
+      - 'action.yml'
+      - 'package.json'
+      - 'pnpm-lock.yaml'
+      - 'pnpm-workspace.yaml'
+      - '.github/workflows/upload-playground.yml'
+
+permissions:
+  contents: read
+
+# 按事件类型分组：push 触发的 dry-run 可以被新提交取代，手动上传之间只排队不取消
+concurrency:
+  group: upload-playground-${{ github.event_name }}-${{ github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'push' }}
 
 jobs:
   upload:
+    name: ${{ (github.event_name == 'push' || inputs.dry_run) && 'Playground dry-run' || 'Playground upload' }}
     runs-on: ubuntu-latest
-    permissions:
-      contents: read
+    timeout-minutes: 40
     env:
+      EVENT_NAME: ${{ github.event_name }}
       WOTCI_VERSION: ${{ inputs.version }}
       WOTCI_DESC: ${{ inputs.desc }}
-      WEIXIN_APPID: ${{ secrets.WEIXIN_APPID }}
-      WEIXIN_PRIVATE_KEY_PATH: keys/weixin.private.key
       WEIXIN_PROJECT_PATH: dist/build/mp-weixin
-      WEIXIN_ROBOT: ${{ secrets.WEIXIN_ROBOT }}
-      ALIPAY_APPID: ${{ secrets.ALIPAY_APPID }}
-      ALIPAY_TOOL_ID: ${{ secrets.ALIPAY_TOOL_ID }}
-      ALIPAY_PRIVATE_KEY: ${{ secrets.ALIPAY_PRIVATE_KEY }}
       ALIPAY_PROJECT_PATH: dist/build/mp-alipay
-      ALIPAY_CLIENT_TYPE: ${{ secrets.ALIPAY_CLIENT_TYPE }}
       ALIPAY_AUTOINCREMENT: ${{ secrets.ALIPAY_AUTOINCREMENT }}
-      DINGTALK_APPID: ${{ secrets.DINGTALK_APPID }}
-      DINGTALK_TOKEN: ${{ secrets.DINGTALK_TOKEN }}
-      DINGTALK_PROJECT_PATH: ${{ secrets.DINGTALK_PROJECT_PATH }}
+      DINGTALK_PROJECT_PATH: ${{ secrets.DINGTALK_PROJECT_PATH || 'dist/build/mp-alipay' }}
       DINGTALK_AUTOINCREMENT: ${{ secrets.DINGTALK_AUTOINCREMENT }}
+
     steps:
-      - uses: actions/checkout@v4
-      - uses: pnpm/action-setup@v4
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+
+      - name: Setup pnpm
+        uses: pnpm/action-setup@v4
         with:
           run_install: false
-      - uses: actions/setup-node@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
         with:
-          node-version: lts/*
+          node-version: 20
           cache: pnpm
+
       - name: Install dependencies
-        run: pnpm install --frozen-lockfile --ignore-scripts
-      - name: Write Weixin private key
-        if: ${{ inputs.platform == 'weixin' }}
-        run: |
-          mkdir -p playground/keys
-          printf '%s' "$WEIXIN_PRIVATE_KEY" > playground/keys/weixin.private.key
+        # 不能加 --ignore-scripts：esbuild 等依赖的安装脚本被跳过会导致 playground 构建失败
+        run: pnpm install --frozen-lockfile
+
+      - name: Resolve run inputs
+        id: inputs
         env:
+          INPUT_PLATFORM: ${{ inputs.platform }}
+          INPUT_DRY_RUN: ${{ inputs.dry_run }}
+          INPUT_ROBOT: ${{ inputs.robot }}
+        run: |
+          set -euo pipefail
+
+          platform="${INPUT_PLATFORM:-weixin}"
+          case "$platform" in
+            weixin|alipay|dingtalk) ;;
+            *) echo "::error::不支持的平台：$platform"; exit 1 ;;
+          esac
+
+          dry_run="${INPUT_DRY_RUN:-false}"
+          if [ "$EVENT_NAME" = "push" ]; then
+            dry_run="true"
+          fi
+
+          robot="${INPUT_ROBOT:-1}"
+          case "$robot" in
+            ''|*[!0-9]*) echo "::error::robot 必须是 1-30 的数字，当前：$robot"; exit 1 ;;
+          esac
+          if [ "$robot" -lt 1 ] || [ "$robot" -gt 30 ]; then
+            echo "::error::robot 必须在 1-30 之间，当前：$robot"; exit 1
+          fi
+
+          {
+            echo "PLATFORM=$platform"
+            echo "DRY_RUN=$dry_run"
+            echo "WEIXIN_ROBOT=$robot"
+            echo "WEIXIN_PRIVATE_KEY_PATH=${RUNNER_TEMP}/weixin.private.key"
+            echo "ALIPAY_PRIVATE_KEY_PATH=${RUNNER_TEMP}/alipay.private.key"
+          } >> "$GITHUB_ENV"
+
+          # 没有显式描述时带上提交号，方便在微信后台区分每次 playground 上传
+          if [ -z "${WOTCI_DESC:-}" ]; then
+            commit="${GITHUB_SHA:-local}"
+            echo "WOTCI_DESC=playground ${commit:0:7}" >> "$GITHUB_ENV"
+          fi
+
+          {
+            echo "platform=$platform"
+            echo "dry_run=$dry_run"
+          } >> "$GITHUB_OUTPUT"
+
+          echo "platform=$platform dry-run=$dry_run robot=$robot"
+
+      - name: Build CLI
+        run: pnpm build
+
+      - name: Build playground
+        run: |
+          set -euo pipefail
+          case "$PLATFORM" in
+            weixin) target=mp-weixin ;;
+            alipay|dingtalk) target=mp-alipay ;;
+          esac
+          pnpm --dir playground "build:$target"
+
+      - name: Prepare upload credentials
+        env:
+          WEIXIN_APPID_SECRET: ${{ secrets.WEIXIN_APPID }}
           WEIXIN_PRIVATE_KEY: ${{ secrets.WEIXIN_PRIVATE_KEY }}
-      - name: Upload playground
-        run: pnpm upload:playground:${{ inputs.platform }}
+          ALIPAY_APPID_SECRET: ${{ secrets.ALIPAY_APPID }}
+          ALIPAY_TOOL_ID_SECRET: ${{ secrets.ALIPAY_TOOL_ID }}
+          ALIPAY_PRIVATE_KEY_SECRET: ${{ secrets.ALIPAY_PRIVATE_KEY }}
+          ALIPAY_CLIENT_TYPE_SECRET: ${{ secrets.ALIPAY_CLIENT_TYPE }}
+          DINGTALK_APPID_SECRET: ${{ secrets.DINGTALK_APPID }}
+          DINGTALK_TOKEN_SECRET: ${{ secrets.DINGTALK_TOKEN }}
+        run: |
+          set -euo pipefail
+
+          require() {
+            local name="$1" value="$2"
+            if [ -z "$value" ]; then
+              echo "::error::缺少 $name secret，无法执行 $PLATFORM 上传"
+              exit 1
+            fi
+          }
+
+          case "$PLATFORM" in
+            weixin)
+              if [ -z "${WEIXIN_APPID_SECRET:-}" ]; then
+                if [ "$DRY_RUN" = "true" ]; then
+                  echo "::warning title=Missing secret::WEIXIN_APPID 未配置，dry-run 使用占位 appid"
+                  echo "WEIXIN_APPID=wx0000000000000000" >> "$GITHUB_ENV"
+                else
+                  echo "::error::缺少 WEIXIN_APPID secret，无法执行微信上传"
+                  exit 1
+                fi
+              else
+                echo "WEIXIN_APPID=${WEIXIN_APPID_SECRET}" >> "$GITHUB_ENV"
+              fi
+
+              if [ -n "${WEIXIN_PRIVATE_KEY:-}" ]; then
+                printf '%s' "$WEIXIN_PRIVATE_KEY" | tr -d '\r' > "$WEIXIN_PRIVATE_KEY_PATH"
+              elif [ "$DRY_RUN" = "true" ]; then
+                echo "::warning title=Missing secret::WEIXIN_PRIVATE_KEY 未配置，dry-run 使用临时测试私钥"
+                openssl genpkey -algorithm RSA -pkeyopt rsa_keygen_bits:2048 -out "$WEIXIN_PRIVATE_KEY_PATH" >/dev/null 2>&1
+              else
+                echo "::error::缺少 WEIXIN_PRIVATE_KEY secret，无法执行微信上传"
+                exit 1
+              fi
+              chmod 600 "$WEIXIN_PRIVATE_KEY_PATH"
+              if ! grep -q -- '-----BEGIN' "$WEIXIN_PRIVATE_KEY_PATH" \
+                || ! grep -q -- '-----END' "$WEIXIN_PRIVATE_KEY_PATH"; then
+                echo "::error::WEIXIN_PRIVATE_KEY 不是完整的 PEM，请确认使用的是小程序代码上传密钥"
+                exit 1
+              fi
+              ;;
+            alipay)
+              require ALIPAY_APPID "${ALIPAY_APPID_SECRET:-}"
+              require ALIPAY_TOOL_ID "${ALIPAY_TOOL_ID_SECRET:-}"
+              require ALIPAY_PRIVATE_KEY "${ALIPAY_PRIVATE_KEY_SECRET:-}"
+              printf '%s' "$ALIPAY_PRIVATE_KEY_SECRET" | tr -d '\r' > "$ALIPAY_PRIVATE_KEY_PATH"
+              chmod 600 "$ALIPAY_PRIVATE_KEY_PATH"
+              if ! grep -q -- '-----BEGIN' "$ALIPAY_PRIVATE_KEY_PATH"; then
+                echo "::error::ALIPAY_PRIVATE_KEY 不是 PEM 格式"
+                exit 1
+              fi
+              echo "ALIPAY_APPID=${ALIPAY_APPID_SECRET}" >> "$GITHUB_ENV"
+              echo "ALIPAY_TOOL_ID=${ALIPAY_TOOL_ID_SECRET}" >> "$GITHUB_ENV"
+              echo "ALIPAY_PRIVATE_KEY_PATH=${ALIPAY_PRIVATE_KEY_PATH}" >> "$GITHUB_ENV"
+              if [ -n "${ALIPAY_CLIENT_TYPE_SECRET:-}" ]; then
+                echo "ALIPAY_CLIENT_TYPE=${ALIPAY_CLIENT_TYPE_SECRET}" >> "$GITHUB_ENV"
+              fi
+              ;;
+            dingtalk)
+              require DINGTALK_APPID "${DINGTALK_APPID_SECRET:-}"
+              require DINGTALK_TOKEN "${DINGTALK_TOKEN_SECRET:-}"
+              echo "DINGTALK_APPID=${DINGTALK_APPID_SECRET}" >> "$GITHUB_ENV"
+              printf 'DINGTALK_TOKEN<<WOTCI_EOF\n%s\nWOTCI_EOF\n' "$DINGTALK_TOKEN_SECRET" >> "$GITHUB_ENV"
+              ;;
+          esac
+
+      - name: Doctor
+        run: node dist/bin.mjs doctor --cwd playground --config wotci.config.ts
+
+      - name: Doctor network check
+        # 微信上传要求调用方 IP 在白名单内，提前用 --network 暴露这类问题；失败不阻塞后续步骤
+        if: ${{ steps.inputs.outputs.dry_run != 'true' }}
+        continue-on-error: true
+        timeout-minutes: 5
+        run: node dist/bin.mjs doctor --cwd playground --config wotci.config.ts --network
+
+      - name: Upload plan (dry-run)
+        id: plan
+        timeout-minutes: 5
+        run: |
+          set -euo pipefail
+          node dist/bin.mjs upload \
+            --cwd playground \
+            --config wotci.config.ts \
+            --platform "$PLATFORM" \
+            --dry-run \
+            --json \
+            --summary "$RUNNER_TEMP/plan-summary.md" \
+            | tee "$RUNNER_TEMP/plan.json"
+
+      - name: Upload
+        id: upload
+        if: ${{ steps.inputs.outputs.dry_run != 'true' }}
+        timeout-minutes: 15
+        run: |
+          set -euo pipefail
+          node dist/bin.mjs upload \
+            --cwd playground \
+            --config wotci.config.ts \
+            --platform "$PLATFORM" \
+            --json \
+            --summary "$RUNNER_TEMP/upload-summary.md" \
+            | tee "$RUNNER_TEMP/upload.json"
+
+      - name: Write job summary
+        if: always()
+        run: |
+          set -euo pipefail
+          platform="${PLATFORM:-weixin}"
+          dry_run="${DRY_RUN:-false}"
+          event_name="${EVENT_NAME:-unknown}"
+          version="${WOTCI_VERSION:-$(node -p "require('./playground/package.json').version")}"
+          desc="${WOTCI_DESC:-$(node -p "require('./playground/package.json').description || ''")}"
+
+          {
+            echo "## Playground 上传验证"
+            echo
+            echo "| 项目 | 值 |"
+            echo "| --- | --- |"
+            echo "| 平台 | $platform |"
+            echo "| 模式 | $([ "$dry_run" = "true" ] && echo 'dry-run（不上传）' || echo '真实上传') |"
+            echo "| 触发方式 | $event_name |"
+            echo "| CLI 版本 | $(node -p "require('./package.json').version") |"
+            echo "| 版本 | $version |"
+            echo "| 描述 | $desc |"
+            echo "| dry-run 校验 | ${{ steps.plan.outcome }} |"
+            echo "| 上传 | ${{ steps.upload.outcome }} |"
+            echo
+          } >> "$GITHUB_STEP_SUMMARY"
+
+          for summary in "$RUNNER_TEMP/plan-summary.md" "$RUNNER_TEMP/upload-summary.md"; do
+            if [ -s "$summary" ]; then
+              cat "$summary" >> "$GITHUB_STEP_SUMMARY"
+            fi
+          done
+
+          if [ "$dry_run" != "true" ] && [ ! -s "$RUNNER_TEMP/upload-summary.md" ]; then
+            echo "> 上传未生成 summary，请查看 “Upload” 步骤日志。" >> "$GITHUB_STEP_SUMMARY"
+          fi
+
+      - name: Upload diagnostics
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: playground-upload-${{ github.run_id }}
+          if-no-files-found: ignore
+          retention-days: 7
+          path: |
+            ${{ runner.temp }}/plan.json
+            ${{ runner.temp }}/plan-summary.md
+            ${{ runner.temp }}/upload.json
+            ${{ runner.temp }}/upload-summary.md
+            playground/dist/build/mp-weixin/project.config.json
+            playground/dist/build/mp-alipay/project.config.json
+
+      - name: Remove private keys
+        if: always()
+        run: |
+          rm -f "${RUNNER_TEMP}/weixin.private.key" "${RUNNER_TEMP}/alipay.private.key"

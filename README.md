@@ -1076,7 +1076,17 @@ ALIPAY_PRIVATE_KEY="$(cat keys/alipay.private.key)" pnpm upload:playground:alipa
 DINGTALK_APPID=xxx DINGTALK_TOKEN=xxx pnpm upload:playground:dingtalk
 ```
 
-GitHub Actions 可参考 [.github/workflows/upload-playground.yml](.github/workflows/upload-playground.yml)。微信上传需要文件路径，工作流会先把 `WEIXIN_PRIVATE_KEY` 写入 `playground/keys/weixin.private.key`，再把路径注入 `WEIXIN_PRIVATE_KEY_PATH`。
+GitHub Actions 可参考 [.github/workflows/upload-playground.yml](.github/workflows/upload-playground.yml)。
+
+工作流会先构建 CLI 与 playground 产物，再依次执行 `doctor`、`upload --dry-run` 和真实上传，并把 JSON 结果与 Step Summary 存档。微信 / 支付宝私钥从 Secrets 写入 `$RUNNER_TEMP` 并设置 `chmod 600`，不会落到工作区；上传结束后会删除。
+
+需要在仓库 Secrets 中配置：
+
+- 微信：`WEIXIN_APPID`、`WEIXIN_PRIVATE_KEY`（小程序代码上传密钥）
+- 支付宝：`ALIPAY_APPID`、`ALIPAY_TOOL_ID`、`ALIPAY_PRIVATE_KEY`
+- 钉钉：`DINGTALK_APPID`、`DINGTALK_TOKEN`
+
+支持手动触发并选择平台、版本、描述、上传机器人（1-30）以及 `dry-run`。push 到 `main` 且改动涉及 CLI / playground 时只跑 dry-run 冒烟测试，不会消耗上传版本。微信上传要求调用方 IP 在白名单内，GitHub 托管 Runner 的出口 IP 不固定，需要在微信公众平台关闭 IP 白名单（或改用自建 Runner）。
 
 ## 开发
 
