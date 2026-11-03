@@ -5,6 +5,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
 const mocks = vi.hoisted(() => ({
   WeixinProject: vi.fn(),
+  packNpm: vi.fn(),
   getLatestVersion: vi.fn(),
   weixinPreview: vi.fn(),
   weixinUpload: vi.fn(),
@@ -19,11 +20,13 @@ const mocks = vi.hoisted(() => ({
 vi.mock('miniprogram-ci', () => ({
   Project: mocks.WeixinProject,
   getLatestVersion: mocks.getLatestVersion,
+  packNpm: mocks.packNpm,
   preview: mocks.weixinPreview,
   upload: mocks.weixinUpload,
   default: {
     Project: mocks.WeixinProject,
     getLatestVersion: mocks.getLatestVersion,
+    packNpm: mocks.packNpm,
     preview: mocks.weixinPreview,
     upload: mocks.weixinUpload,
   },
@@ -74,6 +77,7 @@ beforeEach(() => {
   mocks.WeixinProject.mockImplementation(function (this: Record<string, unknown>, options: Record<string, unknown>) {
     this.options = options
   })
+  mocks.packNpm.mockResolvedValue([])
   mocks.weixinUpload.mockResolvedValue({
     subPackageInfo: [
       { name: '__FULL__', size: 2048 },
@@ -170,6 +174,33 @@ describe('uploadWeixin', () => {
     }, { cwd })
 
     expect(mocks.WeixinProject).toHaveBeenCalledWith(expect.objectContaining({ type: 'miniGame' }))
+  })
+
+  it('buildNpm 为 true 时先执行 packNpm 并返回警告', async () => {
+    const { cwd } = await createFixture()
+    mocks.packNpm.mockResolvedValueOnce([{ code: 'W1', msg: 'warning' }])
+
+    const result = await uploadWeixin({
+      version: '1.0.0',
+      ...weixinConfig({ ignores: ['node_modules'] }),
+    }, { buildNpm: true, cwd })
+
+    expect(mocks.packNpm).toHaveBeenCalledWith(expect.anything(), { ignores: ['node_modules'] })
+    expect(mocks.weixinUpload).toHaveBeenCalled()
+    expect(result.npmWarnings).toEqual([{ code: 'W1', msg: 'warning' }])
+  })
+
+  it('buildNpm 失败时拒绝上传', async () => {
+    const { cwd } = await createFixture()
+    mocks.packNpm.mockRejectedValueOnce(new Error('npm broken'))
+
+    await expect(uploadWeixin({
+      version: '1.0.0',
+      ...weixinConfig(),
+    }, { buildNpm: true, cwd }))
+      .rejects
+      .toThrow('微信上传前构建 npm 失败')
+    expect(mocks.weixinUpload).not.toHaveBeenCalled()
   })
 
   it('缺少 weixin 配置时拒绝', async () => {
@@ -444,6 +475,14 @@ describe('uploadPlatform / upload', () => {
     await expect(uploadPlatform('unknown' as never, {}, { cwd }))
       .rejects
       .toThrow(ConfigError)
+  })
+
+  it('buildNpm 用于非微信平台时拒绝', async () => {
+    const { cwd } = await createFixture()
+
+    await expect(uploadPlatform('alipay', {}, { buildNpm: true, cwd }))
+      .rejects
+      .toMatchObject({ code: 'UNSUPPORTED_CAPABILITY' })
   })
 
   it('通过 JS 调用入口读取内联配置并上传', async () => {

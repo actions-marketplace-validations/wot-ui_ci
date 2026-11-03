@@ -186,6 +186,8 @@ async function checkWeixin(config: WotciConfig, cwd: string, add: AddCheck): Pro
     }
   }
 
+  await checkWeixinDiagnostics(add)
+
   const cliPath = (await Promise.all(
     getWeixinCliCandidates({
       configuredPath: weixin.ide?.cliPath ? resolveFromCwd(cwd, weixin.ide.cliPath) : undefined,
@@ -199,6 +201,37 @@ async function checkWeixin(config: WotciConfig, cwd: string, add: AddCheck): Pro
     add('error', 'weixin-ide', '微信开发者工具', `配置的 cliPath 不存在：${weixin.ide.cliPath}`)
   else
     add('warn', 'weixin-ide', '微信开发者工具', '未找到 CLI，open / auto / ide preview 将不可用')
+}
+
+async function checkWeixinDiagnostics(add: AddCheck): Promise<void> {
+  const required = ['checkCodeQuality', 'getCompiledResult', 'getDevSourceMap', 'packNpm'] as const
+
+  try {
+    const { getWeixinCI } = await import('./platforms/weixin')
+    const ci = getWeixinCI() as unknown as Record<string, unknown>
+    const missing = required.filter(name => typeof ci[name] !== 'function')
+
+    if (missing.length) {
+      add(
+        'warn',
+        'weixin-diagnostics',
+        '微信构建与诊断',
+        `当前 miniprogram-ci 缺少 ${missing.join('、')}，build-npm / sourcemap / inspect / quality 将不可用`,
+      )
+    }
+    else {
+      add('ok', 'weixin-diagnostics', '微信构建与诊断', 'miniprogram-ci 支持 build-npm / sourcemap / inspect / quality')
+    }
+  }
+  catch (error) {
+    add(
+      'warn',
+      'weixin-diagnostics',
+      '微信构建与诊断',
+      '无法加载 miniprogram-ci，相关命令不可用',
+      [error instanceof Error ? error.message : String(error)],
+    )
+  }
 }
 
 async function checkAlipay(config: WotciConfig, cwd: string, add: AddCheck): Promise<void> {

@@ -311,6 +311,8 @@ export interface LoadedConfig {
 export interface UploadOptions {
   /** 相对路径的解析目录，默认 process.cwd() */
   cwd?: string
+  /** 上传/预览前先执行微信「构建 npm」（packNpm），仅微信支持 */
+  buildNpm?: boolean
 }
 
 /** 支持 IDE 操作的平台 */
@@ -554,6 +556,80 @@ export interface InitResult {
   written: boolean
 }
 
+/** 微信构建/诊断请求 */
+export interface WeixinDiagnosticRequest extends UploadOptions {
+  /** 内联配置，传入后不再读取配置文件 */
+  config?: UserConfig
+  /** 显式指定的配置文件 */
+  configFile?: string
+}
+
+/** 微信「构建 npm」请求 */
+export interface WeixinBuildNpmRequest extends WeixinDiagnosticRequest {
+  /** 覆盖 packNpm 的忽略规则 */
+  ignores?: string[]
+}
+
+/** 微信 SourceMap 下载请求 */
+export interface WeixinSourceMapRequest extends WeixinDiagnosticRequest {
+  /** 保存路径，默认 .wotci/weixin/sourcemap.zip */
+  output?: string
+  /** CI 机器人编号，默认取配置或 1 */
+  robot?: number
+  /** 使用流式下载 */
+  streaming?: boolean
+}
+
+/** 微信编译产物导出请求 */
+export interface WeixinCompiledResultRequest extends WeixinDiagnosticRequest {
+  /** 保存路径，默认 .wotci/weixin/compiled.zip */
+  output?: string
+  /** CI 机器人编号，默认取配置 */
+  robot?: number
+}
+
+/** 微信代码质量检查请求 */
+export interface WeixinQualityRequest extends WeixinDiagnosticRequest {
+  /** 检查结果 JSON 输出路径，不传则只返回结果 */
+  output?: string
+}
+
+/** 微信「构建 npm」结果 */
+export interface WeixinBuildNpmResult {
+  platform: 'weixin'
+  warnings: WeixinWarning[]
+  message: string
+}
+
+/** SourceMap / 编译产物导出结果 */
+export interface WeixinDiagnosticResult {
+  platform: 'weixin'
+  outputPath: string
+  message: string
+}
+
+/** 微信代码质量检查项 */
+export interface WeixinQualityCheck {
+  name: string
+  success: boolean
+  text?: string
+  docURL?: string
+  detail?: unknown
+}
+
+/** 微信代码质量检查结果 */
+export interface WeixinQualityResult {
+  platform: 'weixin'
+  /** 检查项总数 */
+  checks: number
+  /** 未通过的检查项 */
+  issues: WeixinQualityCheck[]
+  /** 是否全部通过 */
+  ok: boolean
+  outputPath?: string
+  message: string
+}
+
 /** 版本/体验版操作请求 */
 export interface VersionMutationRequest extends VersionRequest {
   version: string
@@ -639,6 +715,18 @@ export interface WeixinUploadRawResult {
   subPackageInfo?: WeixinSubPackageInfo[]
 }
 
+/** 微信 packNpm / 编译警告 */
+export interface WeixinWarning {
+  /** 警告说明 */
+  msg?: string
+  /** 警告码 */
+  code?: string | number
+  /** 相关文件 */
+  jsPath?: string
+  startLine?: number
+  endLine?: number
+}
+
 /** 支付宝上传的原始返回 */
 export interface AlipayUploadRawResult {
   version?: string
@@ -663,6 +751,8 @@ export interface UploadResult<TPlatform extends Platform = Platform, TRaw = unkn
   }
   /** 包体积预算检查结果 */
   budget?: BudgetReport
+  /** 上传前「构建 npm」产生的警告，仅微信 */
+  npmWarnings?: WeixinWarning[]
   /** SDK 原始返回值 */
   raw: TRaw
 }
@@ -717,6 +807,8 @@ export interface PreviewResult<TPlatform extends Platform = Platform, TRaw = unk
   }
   /** 包体积预算检查结果 */
   budget?: BudgetReport
+  /** 预览前「构建 npm」产生的警告，仅微信 */
+  npmWarnings?: WeixinWarning[]
   /** SDK 原始返回值 */
   raw: TRaw
 }

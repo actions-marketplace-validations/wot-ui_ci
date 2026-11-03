@@ -6,6 +6,7 @@ import type {
   WotciConfig,
 } from './types'
 import { loadConfig } from './config'
+import { CapabilityError } from './errors'
 import { uploadAlipay } from './platforms/alipay'
 import { uploadDingTalk } from './platforms/dingtalk'
 import { uploadWeixin } from './platforms/weixin'
@@ -19,8 +20,12 @@ export async function uploadPlatform(
   options: UploadOptions = {},
 ): Promise<AnyUploadResult> {
   const normalizedConfig = withLegacyAliases(config)
+  const normalizedPlatform = normalizePlatform(platform)
 
-  switch (normalizePlatform(platform)) {
+  if (options.buildNpm && normalizedPlatform !== 'weixin')
+    throw new CapabilityError('buildNpm 仅支持微信小程序')
+
+  switch (normalizedPlatform) {
     case 'alipay':
       return uploadAlipay(normalizedConfig, options)
     case 'dingtalk':

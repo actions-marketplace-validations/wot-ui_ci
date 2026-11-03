@@ -1,5 +1,5 @@
 name: wot-ui-ci
-description: Run wot-ui-ci upload, preview, release or doctor in GitHub Actions
+description: Run wot-ui-ci upload, preview, release, doctor or WeChat diagnostics in GitHub Actions
 author: wot-ui
 
 branding:
@@ -8,7 +8,7 @@ branding:
 
 inputs:
   command:
-    description: CLI command, e.g. upload, preview, release, doctor, version latest, ide status
+    description: CLI command, e.g. upload, preview, release, doctor, build-npm, sourcemap, inspect, quality
     required: false
     default: upload
   platform:

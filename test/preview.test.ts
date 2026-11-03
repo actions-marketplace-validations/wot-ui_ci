@@ -6,6 +6,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
 const mocks = vi.hoisted(() => ({
   WeixinProject: vi.fn(),
+  packNpm: vi.fn(),
   getLatestVersion: vi.fn(),
   alipayPreview: vi.fn(),
   alipayUpload: vi.fn(),
@@ -19,11 +20,13 @@ const mocks = vi.hoisted(() => ({
 vi.mock('miniprogram-ci', () => ({
   Project: mocks.WeixinProject,
   getLatestVersion: mocks.getLatestVersion,
+  packNpm: mocks.packNpm,
   preview: mocks.weixinPreview,
   upload: mocks.weixinUpload,
   default: {
     Project: mocks.WeixinProject,
     getLatestVersion: mocks.getLatestVersion,
+    packNpm: mocks.packNpm,
     preview: mocks.weixinPreview,
     upload: mocks.weixinUpload,
   },
@@ -67,6 +70,7 @@ beforeEach(() => {
   mocks.WeixinProject.mockImplementation(function (this: Record<string, unknown>, options: Record<string, unknown>) {
     this.options = options
   })
+  mocks.packNpm.mockResolvedValue([])
   mocks.weixinPreview.mockResolvedValue({
     subPackageInfo: [
       { name: '__FULL__', size: 4096 },
@@ -152,6 +156,26 @@ describe('previewWeixin', () => {
     expect(result.message).toContain('总包 4KB')
     expect(result.message).toContain('主包 2KB')
     expect(result.sizes).toEqual({ main: 2048, total: 4096 })
+  })
+
+  it('buildNpm 为 true 时先执行 packNpm 并返回警告', async () => {
+    const { cwd } = await createFixture()
+    mocks.packNpm.mockResolvedValueOnce([{ msg: 'preview warning' }])
+
+    const result = await previewWeixin(createWeixinConfig(), { buildNpm: true, cwd })
+
+    expect(mocks.packNpm).toHaveBeenCalledWith(expect.anything(), { ignores: undefined })
+    expect(result.npmWarnings).toEqual([{ msg: 'preview warning' }])
+  })
+
+  it('buildNpm 失败时拒绝预览', async () => {
+    const { cwd } = await createFixture()
+    mocks.packNpm.mockRejectedValueOnce(new Error('npm broken'))
+
+    await expect(previewWeixin(createWeixinConfig(), { buildNpm: true, cwd }))
+      .rejects
+      .toThrow('微信预览前构建 npm 失败')
+    expect(mocks.weixinPreview).not.toHaveBeenCalled()
   })
 
   it('cLI 选项覆盖配置并传递 page / query / scene / robot', async () => {
@@ -401,6 +425,12 @@ describe('previewAlipay', () => {
 })
 
 describe('previewPlatform / preview', () => {
+  it('buildNpm 用于非微信平台时拒绝', async () => {
+    await expect(previewPlatform('alipay', {}, { buildNpm: true }))
+      .rejects
+      .toMatchObject({ code: 'UNSUPPORTED_CAPABILITY' })
+  })
+
   it('按平台路由', async () => {
     const { cwd } = await createFixture()
 

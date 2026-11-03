@@ -7,6 +7,7 @@ import type {
   WeixinPreviewRawResult,
   WeixinSubPackageInfo,
   WeixinUploadRawResult,
+  WeixinWarning,
   WotciConfig,
 } from '../types'
 import { access, mkdir, readFile } from 'node:fs/promises'
@@ -18,33 +19,27 @@ import { PreviewError, UploadError, VersionError } from '../errors'
 import { appendDesc } from '../messages'
 import { isDirectory, resolveFromCwd } from '../utils/path'
 
-type WeixinCI = typeof import('miniprogram-ci')
+export type WeixinCIModule = typeof import('miniprogram-ci')
 
 /** Node 对 CJS 包同时提供命名导出与 default 导出，两种形态都兼容 */
-function resolveWeixinCI(): Pick<WeixinCI, 'Project' | 'getLatestVersion' | 'preview' | 'upload'> {
-  const candidates: unknown[] = [
-    weixinCIModule,
-    (weixinCIModule as { default?: unknown }).default,
-  ]
+export function getWeixinCI(): WeixinCIModule {
+  const candidates: unknown[] = [weixinCIModule]
+
+  // ESM namespace 没有 default 时直接读取会抛错，这里按需探测
+  try {
+    const fallback = (weixinCIModule as { default?: unknown }).default
+    if (fallback)
+      candidates.push(fallback)
+  }
+  catch {}
 
   for (const candidate of candidates) {
     if (!candidate || typeof candidate !== 'object')
       continue
 
-    const value = candidate as Partial<WeixinCI>
-    if (
-      typeof value.Project === 'function'
-      && typeof value.getLatestVersion === 'function'
-      && typeof value.preview === 'function'
-      && typeof value.upload === 'function'
-    ) {
-      return {
-        Project: value.Project,
-        getLatestVersion: value.getLatestVersion,
-        preview: value.preview,
-        upload: value.upload,
-      }
-    }
+    const value = candidate as Partial<WeixinCIModule>
+    if (typeof value.Project === 'function')
+      return value as WeixinCIModule
   }
 
   throw new UploadError('miniprogram-ci 导出格式不受支持')
@@ -73,7 +68,7 @@ export async function getWeixinLatestVersion(
     throw new VersionError(`微信小程序产物目录不存在：${projectPath}`)
 
   try {
-    const ci = resolveWeixinCI()
+    const ci = getWeixinCI()
     const project = new ci.Project({
       appid: weixin.appid,
       ignores: weixin.ignores,
@@ -119,7 +114,7 @@ export async function uploadWeixin(
   if (!await isDirectory(projectPath))
     throw new UploadError(`微信小程序产物目录不存在：${projectPath}`)
 
-  const ci = resolveWeixinCI()
+  const ci = getWeixinCI()
 
   try {
     const project = new ci.Project({
@@ -129,6 +124,9 @@ export async function uploadWeixin(
       projectPath,
       type: weixin.type ?? 'miniProgram',
     })
+    const npmWarnings = options.buildNpm
+      ? await runPackNpm(ci, project, weixin.ignores, '微信上传前构建 npm 失败', (message, cause) => new UploadError(message, cause))
+      : undefined
 
     const raw = await ci.upload({
       desc: config.desc,
@@ -147,6 +145,7 @@ export async function uploadWeixin(
       platform: 'weixin',
       raw: raw ?? {},
       ...(budget ? { budget } : {}),
+      ...(npmWarnings ? { npmWarnings } : {}),
       ...(sizes ? { sizes } : {}),
       version: config.version,
     }
@@ -189,7 +188,7 @@ export async function previewWeixin(
 
   const scene = resolveScene(options.scene ?? previewConfig?.scene)
   const desc = options.desc ?? previewConfig?.desc ?? config.desc
-  const ci = resolveWeixinCI()
+  const ci = getWeixinCI()
 
   try {
     const project = new ci.Project({
@@ -199,6 +198,9 @@ export async function previewWeixin(
       projectPath,
       type: weixin.type ?? 'miniProgram',
     })
+    const npmWarnings = options.buildNpm
+      ? await runPackNpm(ci, project, weixin.ignores, '微信预览前构建 npm 失败', (message, cause) => new PreviewError(message, cause))
+      : undefined
 
     const raw = await ci.preview({
       bigPackageSizeSupport: previewConfig?.bigPackageSizeSupport,
@@ -226,6 +228,7 @@ export async function previewWeixin(
       qrCode,
       raw: raw ?? {},
       ...(budget ? { budget } : {}),
+      ...(npmWarnings ? { npmWarnings } : {}),
       ...(sizes ? { sizes } : {}),
     }
   }
@@ -233,6 +236,31 @@ export async function previewWeixin(
     if (error instanceof PreviewError)
       throw error
     throw new PreviewError('微信小程序预览失败', error)
+  }
+}
+
+async function runPackNpm(
+  ci: WeixinCIModule,
+  project: InstanceType<WeixinCIModule['Project']>,
+  ignores: string[] | undefined,
+  message: string,
+  createError: (message: string, cause?: unknown) => Error,
+): Promise<WeixinWarning[]> {
+  let packNpm: WeixinCIModule['packNpm'] | undefined
+
+  try {
+    packNpm = ci.packNpm
+  }
+  catch {}
+
+  if (typeof packNpm !== 'function')
+    throw createError('当前 miniprogram-ci 版本不支持 packNpm，请升级到 2.x')
+
+  try {
+    return await packNpm(project, { ignores }) as WeixinWarning[]
+  }
+  catch (error) {
+    throw createError(message, error)
   }
 }
 

@@ -14,6 +14,8 @@
 - 支持包体积预算与发布体积趋势
 - 支持 `release` 一步完成构建、多平台上传、历史记录与 PR 评论
 - 支持微信、支付宝预览二维码（文件 / 终端 / URL）
+- 支持微信构建 npm、SourceMap、编译产物导出与代码质量检查
+- 支持上传 / 预览前自动执行微信「构建 npm」（`--build-npm`）
 - 支持通过 CLI/JS API 打开、关闭微信与支付宝开发者工具
 - 支持 `wotci.config.ts/js/mjs/cjs/mts/cts` 配置文件，TS 配置在 CommonJS 项目中同样可用
 - 配置文件可以通过工厂函数读取 `process.env`，避免把密钥写死
@@ -72,6 +74,10 @@ wotci --platform dd
 wotci preview -p weixin
 wotci open -p weixin
 wotci close -p weixin --quit
+wotci build-npm -p weixin
+wotci sourcemap -p weixin --output sm.zip
+wotci inspect -p weixin --output compiled.zip
+wotci quality -p weixin --output report.json
 ```
 
 | 参数 | 说明 |
@@ -79,6 +85,10 @@ wotci close -p weixin --quit
 | `-p, --platform <name>` | 目标平台：`weixin`、`alipay`、`dingtalk`，`dd` 是 `dingtalk` 的别名 |
 | `-c, --config <file>` | 显式指定配置文件，相对路径基于 `--cwd` 解析 |
 | `--cwd <dir>` | 配置解析目录，默认 `process.cwd()` |
+| `--build-npm` | 上传 / 预览前执行微信「构建 npm」 |
+| `--output <file>` | `sourcemap` / `inspect` / `quality` 的输出路径 |
+| `--streaming` | `sourcemap` 使用流式下载 |
+| `--ignores <list>` | `build-npm` 的排除规则，逗号分隔 |
 | `-h, --help` | 查看帮助 |
 
 上传成功退出码为 `0`，失败为 `1`，适合直接在 CI 中使用。
@@ -449,6 +459,90 @@ wotci ide preview -p weixin --qr-output dist/ide-preview.png
 `wotci ide status` 通过 `cli islogin` 判断登录状态；如果 IDE 未启动，该命令可能会启动 IDE。`wotci ide preview` 与 `wotci preview` 的区别是：前者走 IDE 自身 CLI、依赖本机登录态，后者走 `miniprogram-ci`、适合 CI。
 
 为避免 CI 卡在 GUI 上，`CI=true` 时 `open` 默认拒绝执行；`--dry-run` 不受此限制。
+
+## 微信构建与诊断
+
+以下能力仅支持微信小程序，底层对应 `miniprogram-ci` 的 `packNpm`、`getDevSourceMap`、`getCompiledResult`、`checkCodeQuality`。所有命令都支持 `--json`，`--summary <file>` 可写入 CI Step Summary。
+
+### 构建 npm
+
+```sh
+wotci build-npm -p weixin
+wotci build-npm -p weixin --ignores "packageA/**/*,packageB/**/*"
+```
+
+上传 / 预览前也可以自动构建：
+
+```sh
+wotci upload  -p weixin --build-npm
+wotci preview -p weixin --build-npm
+```
+
+`build-npm` 使用配置里的 `weixin.ignores`，`--ignores` 会覆盖它；返回 `warnings` 数组，失败抛 `WeixinDiagnosticError`。
+
+### SourceMap
+
+```sh
+wotci sourcemap -p weixin
+wotci sourcemap -p weixin --output dist/sm.zip --robot 2 --streaming
+```
+
+默认输出 `.wotci/weixin/sourcemap.zip`，`robot` 缺省取 `weixin.robot`，再回退到 `1`。
+
+### 编译产物
+
+```sh
+wotci inspect -p weixin
+wotci inspect -p weixin --output dist/compiled.zip
+```
+
+导出最近一次上传的编译产物 zip，默认 `.wotci/weixin/compiled.zip`；`version` 取配置版本，缺省 `0.0.0`。
+
+### 代码质量
+
+```sh
+wotci quality -p weixin
+wotci quality -p weixin --output report.json
+```
+
+结果包含 `checks`（检查项总数）、`issues`（未通过项）和 `ok`；传 `--output` 时把完整检查结果写入 JSON。默认退出码为 `0`，加 `--fail-on-issues` 可在有未通过项时以退出码 `1` 结束，直接作为 CI 质量门禁。质量检查仍会按配置初始化 `Project`，需要私钥文件存在，但 SDK 不会读取私钥内容。
+
+### JS API
+
+```ts
+import {
+  buildNpm,
+  checkCodeQuality,
+  downloadCompiledResult,
+  downloadSourceMap,
+} from '@wot-ui/ci'
+
+const npm = await buildNpm('weixin', {
+  cwd: process.cwd(),
+  ignores: ['packageA/**/*'],
+})
+console.log(npm.warnings)
+
+await downloadSourceMap('weixin', {
+  cwd: process.cwd(),
+  output: 'dist/sm.zip',
+  robot: 2,
+  streaming: true,
+})
+
+await downloadCompiledResult('weixin', {
+  cwd: process.cwd(),
+  output: 'dist/compiled.zip',
+})
+
+const quality = await checkCodeQuality('weixin', {
+  cwd: process.cwd(),
+  output: 'report.json',
+})
+console.log(quality.ok, quality.issues)
+```
+
+非微信平台会抛 `CapabilityError`（`code: UNSUPPORTED_CAPABILITY`）。
 
 ## 发布编排（release）
 

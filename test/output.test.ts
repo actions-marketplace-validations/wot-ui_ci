@@ -4,7 +4,7 @@ import os from 'node:os'
 import path from 'node:path'
 import { afterEach, describe, expect, it } from 'vitest'
 import { renderBatchJson } from '../src/output/json'
-import { renderBatchSummary, writeBatchSummary } from '../src/output/summary'
+import { renderBatchSummary, renderDiagnosticSummary, writeBatchSummary } from '../src/output/summary'
 
 const tempDirs: string[] = []
 
@@ -211,5 +211,51 @@ describe('renderBatchSummary 边界', () => {
     }
 
     expect(renderBatchSummary(result, 'preview')).toContain('| alipay | ❌ | - | 0.0s |  |')
+  })
+})
+
+describe('renderDiagnosticSummary', () => {
+  it('build-npm 列出警告并在超过 20 条时省略', () => {
+    const warnings = Array.from({ length: 21 }, (_, index) => ({
+      ...(index === 0 ? {} : { jsPath: `pages/${index}.js` }),
+      ...(index === 0 ? {} : { msg: `warning-${index}` }),
+    }))
+
+    const summary = renderDiagnosticSummary('build-npm', {
+      message: 'npm 构建完成，21 条警告',
+      platform: 'weixin',
+      warnings,
+    })
+
+    expect(summary).toContain('## 微信构建与诊断：build-npm')
+    expect(summary).toContain('| 警告 | 21 条 |')
+    expect(summary).toContain('未命名警告')
+    expect(summary).toContain('warning-19')
+    expect(summary).not.toContain('warning-20')
+    expect(summary).toContain('其余 1 条已省略')
+  })
+
+  it('sourcemap 输出路径与转义', () => {
+    const summary = renderDiagnosticSummary('sourcemap', {
+      message: 'sourceMap 已下载',
+      outputPath: '/tmp/a|b.zip',
+      platform: 'weixin',
+    })
+
+    expect(summary).toContain('| 输出 | /tmp/a\\|b.zip |')
+  })
+
+  it('quality 未通过项没有说明时不加冒号', () => {
+    const summary = renderDiagnosticSummary('quality', {
+      checks: 2,
+      issues: [{ name: 'JS_COMPRESS_OPEN', success: false }],
+      message: '1 项未通过',
+      ok: false,
+      platform: 'weixin',
+    })
+
+    expect(summary).toContain('| 检查项 | 2 |')
+    expect(summary).toContain('| 未通过 | 1 |')
+    expect(summary).toContain('- JS_COMPRESS_OPEN\n')
   })
 })

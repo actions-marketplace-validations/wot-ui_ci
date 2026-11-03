@@ -52,6 +52,7 @@ function serializeValue(value: unknown): unknown {
       budget: record.budget,
       desc: record.desc,
       message: record.message,
+      npmWarnings: record.npmWarnings,
       qrCode: record.qrCode,
       sizes: record.sizes,
       version: record.version,
@@ -62,6 +63,7 @@ function serializeValue(value: unknown): unknown {
     budget: record.budget,
     desc: record.desc,
     message: record.message,
+    npmWarnings: record.npmWarnings,
     sizes: record.sizes,
     version: record.version,
   }

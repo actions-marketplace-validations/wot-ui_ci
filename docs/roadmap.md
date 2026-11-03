@@ -67,7 +67,6 @@
 - 版本查询 / 版本策略
 - 包体积预算
 - 配置与凭证体检
-- 构建 npm、SourceMap、编译产物检查
 - 编辑器 / CI 平台集成
 
 ## 3. 路线图
@@ -410,6 +409,8 @@ wotci doctor --json
 
 ### v0.6 — 构建与产物（P2）
 
+> 状态：构建 npm、SourceMap、编译产物导出、代码质量检查已实现；代理、源码打包待做。
+
 | 功能 | 说明 | 平台 |
 | --- | --- | --- |
 | 构建 npm | 上传/预览前执行 `packNpm`，`--build-npm` 开关 | 微信 |
@@ -419,7 +420,20 @@ wotci doctor --json
 | 代理 | 配置 `proxy`，透传 `setCiProxy` / 环境变量 | 微信 |
 | 源码打包 | `wotci pack -p alipay`，对应 `minidev.pack` | 支付宝 |
 
-这些能力更偏「诊断/构建」，建议在预览和批量稳定后再做。
+构建与诊断命令：
+
+```sh
+wotci build-npm -p weixin [--ignores a,b]
+wotci sourcemap -p weixin [--output sm.zip] [--robot 1] [--streaming]
+wotci inspect   -p weixin [--output compiled.zip]
+wotci quality   -p weixin [--output report.json]
+
+# 上传 / 预览前自动构建 npm
+wotci upload  -p weixin --build-npm
+wotci preview -p weixin --build-npm
+```
+
+`doctor` 会额外检查当前 `miniprogram-ci` 是否暴露上述诊断 API，缺失时给出 warn。
 
 ### v0.7 — 集成（进行中）
 

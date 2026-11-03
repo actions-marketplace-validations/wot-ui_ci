@@ -44,6 +44,20 @@ export class ReleaseError extends WotCIError {
   }
 }
 
+export class CapabilityError extends WotCIError {
+  constructor(message: string, cause?: unknown) {
+    super(message, 'UNSUPPORTED_CAPABILITY', cause)
+    this.name = 'CapabilityError'
+  }
+}
+
+export class WeixinDiagnosticError extends WotCIError {
+  constructor(message: string, cause?: unknown) {
+    super(message, 'WEIXIN_DIAGNOSTIC_ERROR', cause)
+    this.name = 'WeixinDiagnosticError'
+  }
+}
+
 export class VersionError extends WotCIError {
   constructor(message: string, cause?: unknown) {
     super(message, 'VERSION_ERROR', cause)

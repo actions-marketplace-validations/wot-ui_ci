@@ -1,4 +1,11 @@
-import type { IdeAction, PlatformInput } from './types'
+import type {
+  IdeAction,
+  PlatformInput,
+  WeixinBuildNpmResult,
+  WeixinDiagnosticResult,
+  WeixinQualityResult,
+  WeixinWarning,
+} from './types'
 import process from 'node:process'
 import { previewMany, uploadMany } from './batch'
 import { formatBudgetReport, isBudgetFailure } from './budget'
@@ -16,7 +23,7 @@ import {
   createCliUploadStartMessage,
 } from './messages'
 import { renderBatchJson } from './output/json'
-import { renderBatchSummary, writeBatchSummary } from './output/summary'
+import { renderBatchSummary, renderDiagnosticSummary, writeBatchSummary } from './output/summary'
 import { previewPlatform } from './preview'
 import { release } from './release'
 import { renderReleaseComment } from './release/github'
@@ -30,26 +37,30 @@ export interface RunCliOptions {
   stdout?: (message: string) => void
 }
 
-export type CliCommand = 'upload' | 'release' | 'preview' | 'open' | 'close' | 'auto' | 'ide-status' | 'ide-preview' | 'version-latest' | 'version-list' | 'version-delete' | 'experience-set' | 'experience-cancel' | 'doctor' | 'init'
+export type CliCommand = 'upload' | 'release' | 'preview' | 'open' | 'close' | 'auto' | 'ide-status' | 'ide-preview' | 'version-latest' | 'version-list' | 'version-delete' | 'experience-set' | 'experience-cancel' | 'doctor' | 'init' | 'build-npm' | 'sourcemap' | 'inspect' | 'quality'
 
 export interface ParsedCliArgs {
   all?: boolean
   appVersion?: string
   build?: string
+  buildNpm?: boolean
   command?: CliCommand
   concurrency?: number
   configFile?: string
   cwd?: string
   desc?: string
   dryRun?: boolean
+  failOnIssues?: boolean
   force?: boolean
   help?: boolean
   history?: boolean
   historyFile?: string
+  ignores?: string
   infoOutput?: string
   json?: boolean
   lang?: 'zh' | 'en'
   network?: boolean
+  output?: string
   page?: string
   pageQuery?: string
   platform?: PlatformInput
@@ -62,13 +73,14 @@ export interface ParsedCliArgs {
   robot?: number
   scene?: string
   skipBuild?: boolean
+  streaming?: boolean
   summary?: string
   ticket?: string
   trustProject?: boolean
   yes?: boolean
 }
 
-const CLI_COMMANDS = new Set<CliCommand>(['upload', 'release', 'preview', 'open', 'close', 'auto', 'doctor', 'init'])
+const CLI_COMMANDS = new Set<CliCommand>(['upload', 'release', 'preview', 'open', 'close', 'auto', 'doctor', 'init', 'build-npm', 'sourcemap', 'inspect', 'quality'])
 
 export async function runCli(argv: string[] = process.argv.slice(2), options: RunCliOptions = {}): Promise<number> {
   let logger = createCliLogger(options)
@@ -168,6 +180,78 @@ export async function runCli(argv: string[] = process.argv.slice(2), options: Ru
 
     logger.info(createCliConfigLoadedMessage(loaded.source, loaded.sourceFile))
 
+    if (command === 'build-npm' || command === 'sourcemap' || command === 'inspect' || command === 'quality') {
+      const {
+        buildNpm,
+        checkCodeQuality,
+        downloadCompiledResult,
+        downloadSourceMap,
+      } = await import('./weixin-diagnostics')
+
+      const common = { config: loaded.config, cwd: loaded.cwd }
+      let result: WeixinBuildNpmResult | WeixinDiagnosticResult | WeixinQualityResult
+
+      if (command === 'build-npm') {
+        result = await buildNpm(platform, {
+          ...common,
+          ...(args.ignores ? { ignores: args.ignores.split(',').map(item => item.trim()).filter(Boolean) } : {}),
+        })
+      }
+      else if (command === 'sourcemap') {
+        result = await downloadSourceMap(platform, {
+          ...common,
+          ...(args.output ? { output: args.output } : {}),
+          ...(args.robot ? { robot: args.robot } : {}),
+          ...(args.streaming ? { streaming: true } : {}),
+        })
+      }
+      else if (command === 'inspect') {
+        result = await downloadCompiledResult(platform, {
+          ...common,
+          ...(args.output ? { output: args.output } : {}),
+          ...(args.robot ? { robot: args.robot } : {}),
+        })
+      }
+      else {
+        result = await checkCodeQuality(platform, {
+          ...common,
+          ...(args.output ? { output: args.output } : {}),
+        })
+      }
+
+      if (args.summary) {
+        const summaryPath = await writeBatchSummary(
+          args.summary,
+          renderDiagnosticSummary(command, result),
+          loaded.cwd,
+        )
+        logger.info(`summary 已写入：${summaryPath}`)
+      }
+
+      if (args.json) {
+        const writeStdout = options.stdout ?? ((message: string) => process.stdout.write(message))
+        writeStdout(`${JSON.stringify({ command, schemaVersion: 1, ...result }, null, 2)}\n`)
+      }
+      else {
+        logger.success(result.message)
+
+        if ('warnings' in result) {
+          for (const warning of result.warnings)
+            logger.log(formatWeixinWarning(warning))
+        }
+
+        if ('issues' in result) {
+          for (const issue of result.issues)
+            logger.log(`- ${issue.name}${issue.text ? `：${issue.text}` : ''}`)
+        }
+
+        if ('outputPath' in result && result.outputPath)
+          logger.info(`输出：${result.outputPath}`)
+      }
+
+      return command === 'quality' && args.failOnIssues && 'ok' in result && !result.ok ? 1 : 0
+    }
+
     if (command === 'experience-set' || command === 'experience-cancel' || command === 'version-delete') {
       if (!args.appVersion) {
         logger.error('缺少必填参数：--version')
@@ -246,6 +330,7 @@ export async function runCli(argv: string[] = process.argv.slice(2), options: Ru
             config: loaded.config,
             cwd: loaded.cwd,
             dryRun: args.dryRun,
+            ...(args.buildNpm ? { buildNpm: true } : {}),
             platforms,
             redirectStdoutToStderr: args.json,
           })
@@ -254,6 +339,7 @@ export async function runCli(argv: string[] = process.argv.slice(2), options: Ru
             config: loaded.config,
             cwd: loaded.cwd,
             dryRun: args.dryRun,
+            ...(args.buildNpm ? { buildNpm: true } : {}),
             pagePath: args.page,
             platforms,
             qrFormat: args.qrFormat,
@@ -405,6 +491,7 @@ export async function runCli(argv: string[] = process.argv.slice(2), options: Ru
 
       const result = await previewPlatform(platform, loaded.config, {
         cwd: loaded.cwd,
+        ...(args.buildNpm ? { buildNpm: true } : {}),
         desc: args.desc,
         pagePath: args.page,
         pageQuery: args.pageQuery,
@@ -448,7 +535,10 @@ export async function runCli(argv: string[] = process.argv.slice(2), options: Ru
       cwd: loaded.cwd,
       packageJson: loaded.packageJson,
     })
-    const result = await uploadPlatform(platform, applyVersion(loaded.config, resolution), { cwd: loaded.cwd })
+    const result = await uploadPlatform(platform, applyVersion(loaded.config, resolution), {
+      cwd: loaded.cwd,
+      ...(args.buildNpm ? { buildNpm: true } : {}),
+    })
     const budgetFailed = isBudgetFailure(result.budget)
 
     if (budgetFailed && result.budget)
@@ -542,6 +632,9 @@ export function parseCliArgs(argv: string[]): ParsedCliArgs {
       case '--force':
         parsed.force = true
         break
+      case '--fail-on-issues':
+        parsed.failOnIssues = true
+        break
       case '--quit':
         parsed.quit = true
         break
@@ -590,6 +683,9 @@ export function parseCliArgs(argv: string[]): ParsedCliArgs {
       case '--build':
         parsed.build = readOptionValue(argv, ++index, current)
         break
+      case '--build-npm':
+        parsed.buildNpm = true
+        break
       case '--skip-build':
         parsed.skipBuild = true
         break
@@ -623,12 +719,29 @@ export function parseCliArgs(argv: string[]): ParsedCliArgs {
       case '--yes':
         parsed.yes = true
         break
+      case '--output':
+        parsed.output = readOptionValue(argv, ++index, current)
+        break
+      case '--streaming':
+        parsed.streaming = true
+        break
+      case '--ignores':
+        parsed.ignores = readOptionValue(argv, ++index, current)
+        break
       default:
         throw new ConfigError(`未知参数：${current}`)
     }
   }
 
   return parsed
+}
+
+function formatWeixinWarning(warning: WeixinWarning): string {
+  const location = warning.jsPath
+    ? ` @ ${warning.jsPath}${warning.startLine ? `:${warning.startLine}` : ''}`
+    : ''
+  const code = warning.code === undefined ? '' : ` [${warning.code}]`
+  return `- ${warning.msg ?? '未命名警告'}${code}${location}`
 }
 
 function readOptionValue(argv: string[], index: number, optionName: string): string {

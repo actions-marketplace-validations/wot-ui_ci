@@ -67,6 +67,27 @@ describe('miniprogram-ci 导出形态', () => {
       .toThrow('miniprogram-ci 导出格式不受支持')
   })
 
+  it('缺少 packNpm 时 buildNpm 给出明确错误', async () => {
+    const cwd = await createFixture()
+    const Project = vi.fn(function (this: Record<string, unknown>, options: Record<string, unknown>) {
+      this.options = options
+    })
+    const upload = vi.fn(async () => ({ subPackageInfo: [] }))
+
+    vi.doMock('miniprogram-ci', () => ({
+      Project,
+      preview: vi.fn(),
+      upload,
+      default: { Project, preview: vi.fn(), upload },
+    }))
+    const { uploadWeixin } = await import('../src/platforms/weixin')
+
+    await expect(uploadWeixin({ version: '1.0.0', weixin: weixinConfig }, { buildNpm: true, cwd }))
+      .rejects
+      .toThrow('当前 miniprogram-ci 版本不支持 packNpm')
+    expect(upload).not.toHaveBeenCalled()
+  })
+
   it('default 也不是对象时抛出 UploadError', async () => {
     const cwd = await createFixture()
 

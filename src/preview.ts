@@ -6,7 +6,7 @@ import type {
   WotciConfig,
 } from './types'
 import { loadConfig } from './config'
-import { PreviewUnsupportedError } from './errors'
+import { CapabilityError, PreviewUnsupportedError } from './errors'
 import { previewAlipay } from './platforms/alipay'
 import { previewWeixin } from './platforms/weixin'
 import { normalizePlatform } from './utils/platform'
@@ -17,7 +17,12 @@ export async function previewPlatform(
   config: WotciConfig,
   options: PreviewOptions = {},
 ): Promise<AnyPreviewResult> {
-  switch (normalizePlatform(platform)) {
+  const normalizedPlatform = normalizePlatform(platform)
+
+  if (options.buildNpm && normalizedPlatform !== 'weixin')
+    throw new CapabilityError('buildNpm 仅支持微信小程序')
+
+  switch (normalizedPlatform) {
     case 'alipay':
       return previewAlipay(config, options)
     case 'weixin':

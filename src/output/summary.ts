@@ -1,4 +1,11 @@
-import type { BatchItemResult, BatchResult, PlatformPlan } from '../types'
+import type {
+  BatchItemResult,
+  BatchResult,
+  PlatformPlan,
+  WeixinBuildNpmResult,
+  WeixinDiagnosticResult,
+  WeixinQualityResult,
+} from '../types'
 import { mkdir, writeFile } from 'node:fs/promises'
 import path from 'node:path'
 import process from 'node:process'
@@ -53,6 +60,47 @@ export function renderBatchSummary(
         escapeCell(item.error?.message ?? value?.message ?? ''),
       ].join(' | ').replace(/^/, '| ').replace(/$/, ' |'))
     }
+  }
+
+  return `${lines.join('\n')}\n`
+}
+
+/** 微信构建/诊断命令的 Step Summary */
+export function renderDiagnosticSummary(
+  command: 'build-npm' | 'sourcemap' | 'inspect' | 'quality',
+  result: WeixinBuildNpmResult | WeixinDiagnosticResult | WeixinQualityResult,
+): string {
+  const lines = [
+    `## 微信构建与诊断：${command}`,
+    '',
+    '| 项目 | 值 |',
+    '| --- | --- |',
+    `| 结果 | ${escapeCell(result.message)} |`,
+  ]
+
+  if ('warnings' in result)
+    lines.push(`| 警告 | ${result.warnings.length} 条 |`)
+
+  if ('issues' in result) {
+    lines.push(`| 检查项 | ${result.checks} |`)
+    lines.push(`| 未通过 | ${result.issues.length} |`)
+  }
+
+  if ('outputPath' in result && result.outputPath)
+    lines.push(`| 输出 | ${escapeCell(result.outputPath)} |`)
+
+  if ('warnings' in result && result.warnings.length) {
+    lines.push('', '### npm 构建警告', '')
+    for (const warning of result.warnings.slice(0, 20))
+      lines.push(`- ${escapeCell(warning.msg ?? '未命名警告')}${warning.jsPath ? `（${escapeCell(warning.jsPath)}）` : ''}`)
+    if (result.warnings.length > 20)
+      lines.push(`- 其余 ${result.warnings.length - 20} 条已省略`)
+  }
+
+  if ('issues' in result && result.issues.length) {
+    lines.push('', '### 未通过项', '')
+    for (const issue of result.issues)
+      lines.push(`- ${escapeCell(issue.name)}${issue.text ? `：${escapeCell(issue.text)}` : ''}`)
   }
 
   return `${lines.join('\n')}\n`

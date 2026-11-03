@@ -62,7 +62,7 @@ case "${INPUT_HISTORY:-auto}" in
 esac
 
 case "${command_parts[0]}" in
-  upload|preview|release)
+  upload|preview|release|build-npm|sourcemap|inspect|quality)
     if [ -n "${INPUT_SUMMARY:-}" ]; then
       args+=("--summary" "$INPUT_SUMMARY")
     fi

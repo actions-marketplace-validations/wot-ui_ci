@@ -5,10 +5,15 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
 const mocks = vi.hoisted(() => ({
   getLatestVersion: vi.fn(),
+  getWeixinCI: vi.fn(),
 }))
 
 vi.mock('../src/version', () => ({
   getLatestVersion: mocks.getLatestVersion,
+}))
+
+vi.mock('../src/platforms/weixin', () => ({
+  getWeixinCI: mocks.getWeixinCI,
 }))
 
 const { runDoctor } = await import('../src/doctor')
@@ -18,6 +23,13 @@ const tempDirs: string[] = []
 beforeEach(() => {
   vi.clearAllMocks()
   mocks.getLatestVersion.mockResolvedValue({ latest: '1.0.0', platform: 'weixin' })
+  mocks.getWeixinCI.mockReturnValue({
+    Project: vi.fn(),
+    checkCodeQuality: vi.fn(),
+    getCompiledResult: vi.fn(),
+    getDevSourceMap: vi.fn(),
+    packNpm: vi.fn(),
+  })
 })
 
 afterEach(async () => {
@@ -369,5 +381,49 @@ describe('doctor 预算检查', () => {
       cwd,
     })
     expect(bad.checks).toContainEqual(expect.objectContaining({ id: 'budgets', status: 'error' }))
+  })
+})
+
+describe('doctor 微信构建与诊断', () => {
+  it('微信 SDK 支持诊断能力时返回 ok', async () => {
+    const cwd = await createFixture()
+    const config = createConfig(cwd)
+
+    const result = await runDoctor({ config, cwd })
+
+    expect(result.checks).toContainEqual(expect.objectContaining({
+      id: 'weixin-diagnostics',
+      status: 'ok',
+    }))
+  })
+
+  it('微信 SDK 缺少诊断 API 时给出 warn', async () => {
+    const cwd = await createFixture()
+    const config = createConfig(cwd)
+    mocks.getWeixinCI.mockReturnValueOnce({ Project: vi.fn(), packNpm: vi.fn() })
+
+    const result = await runDoctor({ config, cwd })
+
+    expect(result.checks).toContainEqual(expect.objectContaining({
+      id: 'weixin-diagnostics',
+      message: expect.stringContaining('checkCodeQuality'),
+      status: 'warn',
+    }))
+  })
+
+  it('无法加载 miniprogram-ci 时给出 warn 与详情', async () => {
+    const cwd = await createFixture()
+    const config = createConfig(cwd)
+    mocks.getWeixinCI.mockImplementationOnce(() => {
+      throw new Error('cannot load sdk')
+    })
+
+    const result = await runDoctor({ config, cwd })
+
+    expect(result.checks).toContainEqual(expect.objectContaining({
+      details: ['cannot load sdk'],
+      id: 'weixin-diagnostics',
+      status: 'warn',
+    }))
   })
 })

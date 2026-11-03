@@ -87,7 +87,10 @@ async function runBatch<TResult>(
 
     try {
       const result = (action === 'upload'
-        ? await uploadPlatform(platform, config, { cwd })
+        ? await uploadPlatform(platform, config, {
+            cwd,
+            ...(request.buildNpm ? { buildNpm: true } : {}),
+          })
         : await previewPlatform(platform, config, request)) as TResult
 
       const budgetFailed = isBudgetFailure(

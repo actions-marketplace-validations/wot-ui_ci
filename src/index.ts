@@ -8,6 +8,7 @@ import {
 import { runDoctor } from './doctor'
 import {
   BuildError,
+  CapabilityError,
   ConfigError,
   IdeCommandError,
   IdeError,
@@ -17,6 +18,7 @@ import {
   PreviewUnsupportedError,
   ReleaseError,
   UploadError,
+  WeixinDiagnosticError,
   WotCIError,
 } from './errors'
 import { autoIde, closeIde, getIdeStatus, openIde, previewIde } from './ide'
@@ -35,6 +37,12 @@ import { normalizePlatform } from './utils/platform'
 import { compareVersion } from './utils/version'
 import { cancelExperience, deleteVersion, getLatestVersion, getVersionList, setExperience } from './version'
 import { applyVersion, bumpVersion, resolveVersion } from './version-strategy'
+import {
+  buildNpm,
+  checkCodeQuality,
+  downloadCompiledResult,
+  downloadSourceMap,
+} from './weixin-diagnostics'
 
 export {
   CONFIG_FILE_NAMES,
@@ -44,6 +52,7 @@ export {
 }
 export {
   BuildError,
+  CapabilityError,
   ConfigError,
   IdeCommandError,
   IdeError,
@@ -53,7 +62,14 @@ export {
   PreviewUnsupportedError,
   ReleaseError,
   UploadError,
+  WeixinDiagnosticError,
   WotCIError,
+}
+export {
+  buildNpm,
+  checkCodeQuality,
+  downloadCompiledResult,
+  downloadSourceMap,
 }
 export { release }
 export {
@@ -162,18 +178,34 @@ export type {
   VersionRequest,
   VersionResolution,
   VersionStrategy,
+  WeixinBuildNpmRequest,
+  WeixinBuildNpmResult,
+  WeixinCompiledResultRequest,
   WeixinConfig,
+  WeixinDiagnosticRequest,
+  WeixinDiagnosticResult,
   WeixinIdeConfig,
   WeixinPreviewConfig,
   WeixinPreviewRawResult,
+  WeixinQualityCheck,
+  WeixinQualityRequest,
+  WeixinQualityResult,
+  WeixinSourceMapRequest,
   WeixinSubPackageInfo,
   WeixinUploadRawResult,
   WeixinUploadSetting,
+  WeixinWarning,
   WotciConfig,
 } from './types'
 
 const wotci = {
   BuildError,
+  CapabilityError,
+  WeixinDiagnosticError,
+  buildNpm,
+  checkCodeQuality,
+  downloadCompiledResult,
+  downloadSourceMap,
   CONFIG_FILE_NAMES,
   ConfigError,
   IdeCommandError,
