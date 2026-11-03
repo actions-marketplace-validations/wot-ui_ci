@@ -1,84 +1,257 @@
+import { previewMany, uploadMany } from './batch'
 import {
   CONFIG_FILE_NAMES,
   defineConfig,
+  LEGACY_CONFIG_FILE_NAME,
   loadConfig,
 } from './config'
+import { runDoctor } from './doctor'
 import {
+  BuildError,
+  CapabilityError,
   ConfigError,
+  IdeCommandError,
+  IdeError,
+  IdeNotFoundError,
+  IdeUnsupportedError,
+  PreviewError,
+  PreviewUnsupportedError,
+  ReleaseError,
   UploadError,
+  WeixinDiagnosticError,
   WotCIError,
 } from './errors'
+import { autoIde, closeIde, getIdeStatus, openIde, previewIde } from './ide'
+import { runAlipayIde } from './ide/alipay'
+import { autoWeixinIde, getWeixinIdeStatus, previewWeixinIde, runWeixinIde } from './ide/weixin'
+import { initProject } from './init'
+import { renderBatchJson } from './output/json'
+import { renderBatchSummary } from './output/summary'
+import { previewAlipay, uploadAlipay } from './platforms/alipay'
+import { uploadDingTalk } from './platforms/dingtalk'
+import { previewWeixin, uploadWeixin } from './platforms/weixin'
+import { preview, previewPlatform } from './preview'
+import { release } from './release'
+import { upload, uploadPlatform } from './upload'
+import { normalizePlatform } from './utils/platform'
+import { compareVersion } from './utils/version'
+import { cancelExperience, deleteVersion, getLatestVersion, getVersionList, setExperience } from './version'
+import { applyVersion, bumpVersion, resolveVersion } from './version-strategy'
 import {
-  uploadAlipay,
-} from './platforms/alipay'
-import {
-  uploadDingTalk,
-} from './platforms/dingtalk'
-import {
-  uploadWeixin,
-} from './platforms/weixin'
-import {
-  uploadPlatform,
-} from './upload'
-import {
-  compareVersion,
-} from './utils/version'
+  buildNpm,
+  checkCodeQuality,
+  downloadCompiledResult,
+  downloadSourceMap,
+} from './weixin-diagnostics'
 
 export {
   CONFIG_FILE_NAMES,
   defineConfig,
+  LEGACY_CONFIG_FILE_NAME,
   loadConfig,
 }
 export {
+  BuildError,
+  CapabilityError,
   ConfigError,
+  IdeCommandError,
+  IdeError,
+  IdeNotFoundError,
+  IdeUnsupportedError,
+  PreviewError,
+  PreviewUnsupportedError,
+  ReleaseError,
   UploadError,
+  WeixinDiagnosticError,
   WotCIError,
 }
 export {
+  buildNpm,
+  checkCodeQuality,
+  downloadCompiledResult,
+  downloadSourceMap,
+}
+export { release }
+export {
+  preview,
+  previewAlipay,
+  previewPlatform,
+  previewWeixin,
+}
+export {
+  autoIde,
+  autoWeixinIde,
+  closeIde,
+  getIdeStatus,
+  getWeixinIdeStatus,
+  openIde,
+  previewIde,
+  previewWeixinIde,
+  runAlipayIde,
+  runWeixinIde,
+}
+export {
+  applyVersion,
+  bumpVersion,
+  cancelExperience,
+  deleteVersion,
+  getLatestVersion,
+  getVersionList,
+  normalizePlatform,
+  previewMany,
+  renderBatchJson,
+  renderBatchSummary,
+  upload,
   uploadAlipay,
-}
-export {
   uploadDingTalk,
-}
-export {
+  uploadMany,
+  uploadPlatform,
   uploadWeixin,
 }
+export { compareVersion }
+
 export type {
   AlipayClientType,
   AlipayConfig,
+  AlipayIdeConfig,
+  AlipayPreviewConfig,
+  AlipayPreviewRawResult,
+  AlipayUploadRawResult,
+  AnyPreviewResult,
+  AnyUploadResult,
+  BatchItemResult,
+  BatchRequest,
+  BatchResult,
   CIConfig,
   ConfigFactory,
   ConfigFactoryContext,
   ConfigSource,
   DingtalkConfig,
   DingtalkProjectType,
+  DingtalkUploadRawResult,
+  DoctorCheck,
+  DoctorRequest,
+  DoctorResult,
+  DoctorStatus,
+  IdeAction,
+  IdeOptions,
+  IdePlatform,
+  IdePreviewOptions,
+  IdePreviewRequest,
+  IdePreviewResult,
+  IdeRequest,
+  IdeResult,
+  IdeStatusResult,
+  InitOptions,
+  InitResult,
   LoadConfigOptions,
   LoadedConfig,
   MaybePromise,
-  PackageJsonConfig,
-  PlatformName,
-  PlatformUploadResult,
+  PackageJsonLike,
+  Platform,
+  PlatformInput,
+  PlatformPlan,
+  PlatformPlanCheck,
+  PreviewOptions,
+  PreviewQrCode,
+  PreviewRequest,
+  PreviewResult,
   ProjectType,
-  UploadContext,
+  QrCodeKind,
+  ReleaseBuildResult,
+  ReleaseConfig,
+  ReleaseGitInfo,
+  ReleaseHistoryRecord,
+  ReleasePlatformResult,
+  ReleaseRequest,
+  ReleaseResult,
+  SerializedError,
+  UploadOptions,
+  UploadRequest,
+  UploadResult,
   UserConfig,
+  VersionBump,
+  VersionInfo,
+  VersionMutationRequest,
+  VersionMutationResult,
+  VersionRecord,
+  VersionRequest,
+  VersionResolution,
+  VersionStrategy,
+  WeixinBuildNpmRequest,
+  WeixinBuildNpmResult,
+  WeixinCompiledResultRequest,
   WeixinConfig,
+  WeixinDiagnosticRequest,
+  WeixinDiagnosticResult,
+  WeixinIdeConfig,
+  WeixinPreviewConfig,
+  WeixinPreviewRawResult,
+  WeixinQualityCheck,
+  WeixinQualityRequest,
+  WeixinQualityResult,
+  WeixinSourceMapRequest,
+  WeixinSubPackageInfo,
+  WeixinUploadRawResult,
   WeixinUploadSetting,
+  WeixinWarning,
+  WotciConfig,
 } from './types'
-export {
-  uploadPlatform,
-}
-export {
-  compareVersion,
-}
 
 const wotci = {
+  BuildError,
+  CapabilityError,
+  WeixinDiagnosticError,
+  buildNpm,
+  checkCodeQuality,
+  downloadCompiledResult,
+  downloadSourceMap,
   CONFIG_FILE_NAMES,
   ConfigError,
-  WotCIError,
+  IdeCommandError,
+  IdeError,
+  IdeNotFoundError,
+  IdeUnsupportedError,
+  LEGACY_CONFIG_FILE_NAME,
+  PreviewError,
+  PreviewUnsupportedError,
+  ReleaseError,
   UploadError,
+  WotCIError,
+  autoIde,
+  autoWeixinIde,
+  applyVersion,
+  bumpVersion,
+  cancelExperience,
+  closeIde,
+  deleteVersion,
   compareVersion,
+  getLatestVersion,
+  getVersionList,
   defineConfig,
+  getIdeStatus,
+  getWeixinIdeStatus,
   loadConfig,
+  normalizePlatform,
+  openIde,
+  preview,
+  previewAlipay,
+  previewIde,
+  previewWeixinIde,
+  previewPlatform,
+  previewMany,
+  previewWeixin,
+  release,
+  renderBatchJson,
+  initProject,
+  renderBatchSummary,
+  resolveVersion,
+  runDoctor,
+  setExperience,
+  uploadMany,
+  runAlipayIde,
+  runWeixinIde,
+  upload,
   uploadAlipay,
   uploadDingTalk,
   uploadPlatform,

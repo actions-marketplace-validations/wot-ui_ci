@@ -23,6 +23,90 @@ export class UploadError extends WotCIError {
   }
 }
 
+export class PreviewError extends WotCIError {
+  constructor(message: string, cause?: unknown) {
+    super(message, 'PREVIEW_ERROR', cause)
+    this.name = 'PreviewError'
+  }
+}
+
+export class PreviewUnsupportedError extends WotCIError {
+  constructor(message: string, cause?: unknown) {
+    super(message, 'PREVIEW_UNSUPPORTED', cause)
+    this.name = 'PreviewUnsupportedError'
+  }
+}
+
+export class ReleaseError extends WotCIError {
+  constructor(message: string, cause?: unknown) {
+    super(message, 'RELEASE_ERROR', cause)
+    this.name = 'ReleaseError'
+  }
+}
+
+export class CapabilityError extends WotCIError {
+  constructor(message: string, cause?: unknown) {
+    super(message, 'UNSUPPORTED_CAPABILITY', cause)
+    this.name = 'CapabilityError'
+  }
+}
+
+export class WeixinDiagnosticError extends WotCIError {
+  constructor(message: string, cause?: unknown) {
+    super(message, 'WEIXIN_DIAGNOSTIC_ERROR', cause)
+    this.name = 'WeixinDiagnosticError'
+  }
+}
+
+export class VersionError extends WotCIError {
+  constructor(message: string, cause?: unknown) {
+    super(message, 'VERSION_ERROR', cause)
+    this.name = 'VersionError'
+  }
+}
+
+export class VersionUnsupportedError extends WotCIError {
+  constructor(message: string, cause?: unknown) {
+    super(message, 'VERSION_UNSUPPORTED', cause)
+    this.name = 'VersionUnsupportedError'
+  }
+}
+
+export class BuildError extends WotCIError {
+  constructor(message: string, cause?: unknown) {
+    super(message, 'BUILD_ERROR', cause)
+    this.name = 'BuildError'
+  }
+}
+
+export class IdeError extends WotCIError {
+  constructor(message: string, code = 'IDE_ERROR', cause?: unknown) {
+    super(message, code, cause)
+    this.name = 'IdeError'
+  }
+}
+
+export class IdeNotFoundError extends IdeError {
+  constructor(message: string, cause?: unknown) {
+    super(message, 'IDE_NOT_FOUND', cause)
+    this.name = 'IdeNotFoundError'
+  }
+}
+
+export class IdeUnsupportedError extends IdeError {
+  constructor(message: string, cause?: unknown) {
+    super(message, 'IDE_UNSUPPORTED', cause)
+    this.name = 'IdeUnsupportedError'
+  }
+}
+
+export class IdeCommandError extends IdeError {
+  constructor(message: string, cause?: unknown) {
+    super(message, 'IDE_COMMAND_FAILED', cause)
+    this.name = 'IdeCommandError'
+  }
+}
+
 export function formatErrorReport(error: unknown): string[] {
   const lines: string[] = []
   const visited = new Set<unknown>()

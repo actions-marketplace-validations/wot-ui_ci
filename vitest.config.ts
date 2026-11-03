@@ -1,12 +1,3 @@
-/*
- * @Author: weisheng
- * @Date: 2026-04-15 13:22:39
- * @LastEditTime: 2026-04-15 21:54:50
- * @LastEditors: weisheng
- * @Description:
- * @FilePath: /ci/vitest.config.ts
- * 记得注释
- */
 import { defineConfig } from 'vitest/config'
 
 export default defineConfig({
@@ -14,6 +5,8 @@ export default defineConfig({
     coverage: {
       exclude: [
         'playground/**',
+        // 进程入口依赖 process.exit，无法在单元测试中安全执行
+        'src/bin.ts',
         'src/types.ts',
         'test/**',
         '**/*.d.ts',
@@ -22,6 +15,12 @@ export default defineConfig({
       include: ['src/**/*.ts'],
       provider: 'v8',
       reporter: ['text', 'text-summary', 'json-summary', 'lcov', 'html'],
+      thresholds: {
+        branches: 95,
+        functions: 95,
+        lines: 95,
+        statements: 95,
+      },
     },
     server: {
       deps: {

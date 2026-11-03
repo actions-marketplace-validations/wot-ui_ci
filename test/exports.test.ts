@@ -26,6 +26,7 @@ describe('package exports', () => {
       '.': './dist/index.mjs',
       './bin': './dist/bin.mjs',
       './cli': './dist/cli.mjs',
+      './vite': './dist/vite.mjs',
       './package.json': './package.json',
     })
     expect(packageJson.main).toBe('./dist/index.mjs')
