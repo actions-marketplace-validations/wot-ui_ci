@@ -465,3 +465,27 @@ describe('doctor 参数', () => {
     expect(createCliHelpText()).toContain('--network')
   })
 })
+
+describe('init 参数', () => {
+  it('解析 init 选项', () => {
+    expect(parseCliArgs([
+      'init',
+      '--platform',
+      'weixin,alipay',
+      '--config',
+      'ci.ts',
+      '--force',
+      '--dry-run',
+    ])).toEqual({
+      command: 'init',
+      configFile: 'ci.ts',
+      dryRun: true,
+      force: true,
+      platform: 'weixin,alipay',
+    })
+  })
+
+  it('帮助信息包含 init', () => {
+    expect(createCliHelpText()).toContain('wotci init')
+  })
+})

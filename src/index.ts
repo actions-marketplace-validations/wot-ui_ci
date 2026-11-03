@@ -22,6 +22,7 @@ import {
 import { autoIde, closeIde, getIdeStatus, openIde, previewIde } from './ide'
 import { runAlipayIde } from './ide/alipay'
 import { autoWeixinIde, getWeixinIdeStatus, previewWeixinIde, runWeixinIde } from './ide/weixin'
+import { initProject } from './init'
 import { renderBatchJson } from './output/json'
 import { renderBatchSummary } from './output/summary'
 import { previewAlipay, uploadAlipay } from './platforms/alipay'
@@ -123,6 +124,8 @@ export type {
   IdeRequest,
   IdeResult,
   IdeStatusResult,
+  InitOptions,
+  InitResult,
   LoadConfigOptions,
   LoadedConfig,
   MaybePromise,
@@ -202,6 +205,7 @@ const wotci = {
   previewWeixin,
   release,
   renderBatchJson,
+  initProject,
   renderBatchSummary,
   resolveVersion,
   runDoctor,

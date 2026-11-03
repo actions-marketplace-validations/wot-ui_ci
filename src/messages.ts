@@ -55,6 +55,7 @@ export function createCliHelpText(): string {
     '  wotci version latest --platform <weixin|alipay> [--json]',
     '  wotci version list   --platform alipay [--json]',
     '  wotci doctor [--network] [--json]',
+    '  wotci init [--platform <weixin,alipay,...>] [--config <file>] [--force] [--dry-run]',
     '  wotci preview --platform <weixin|alipay> [options]',
     '  wotci open   --platform <weixin|alipay> [options]',
     '  wotci close  --platform <weixin|alipay> [options]',

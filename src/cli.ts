@@ -6,6 +6,7 @@ import { loadConfig } from './config'
 import { runDoctor } from './doctor'
 import { ConfigError, formatErrorReport, formatErrorStack, WotCIError } from './errors'
 import { autoIde, closeIde, getIdeStatus, openIde, previewIde } from './ide'
+import { initProject } from './init'
 import { createCliLogger } from './logger'
 import {
   createCliConfigLoadedMessage,
@@ -29,7 +30,7 @@ export interface RunCliOptions {
   stdout?: (message: string) => void
 }
 
-export type CliCommand = 'upload' | 'release' | 'preview' | 'open' | 'close' | 'auto' | 'ide-status' | 'ide-preview' | 'version-latest' | 'version-list' | 'doctor'
+export type CliCommand = 'upload' | 'release' | 'preview' | 'open' | 'close' | 'auto' | 'ide-status' | 'ide-preview' | 'version-latest' | 'version-list' | 'doctor' | 'init'
 
 export interface ParsedCliArgs {
   all?: boolean
@@ -65,7 +66,7 @@ export interface ParsedCliArgs {
   trustProject?: boolean
 }
 
-const CLI_COMMANDS = new Set<CliCommand>(['upload', 'release', 'preview', 'open', 'close', 'auto', 'doctor'])
+const CLI_COMMANDS = new Set<CliCommand>(['upload', 'release', 'preview', 'open', 'close', 'auto', 'doctor', 'init'])
 
 export async function runCli(argv: string[] = process.argv.slice(2), options: RunCliOptions = {}): Promise<number> {
   let logger = createCliLogger(options)
@@ -89,6 +90,30 @@ export async function runCli(argv: string[] = process.argv.slice(2), options: Ru
 
     if (args.help) {
       logger.log(createCliHelpText())
+      return 0
+    }
+
+    if (command === 'init') {
+      const result = await initProject({
+        configFile: args.configFile,
+        cwd: args.cwd ?? options.cwd,
+        dryRun: args.dryRun,
+        force: args.force,
+        platforms: args.platform?.split(',').map(item => item.trim()).filter(Boolean) as PlatformInput[] | undefined,
+      })
+
+      if (args.json) {
+        const writeStdout = options.stdout ?? ((message: string) => process.stdout.write(message))
+        writeStdout(`${JSON.stringify({ command: 'init', schemaVersion: 1, ...result }, null, 2)}\n`)
+      }
+      else if (result.written) {
+        logger.success(`配置文件已生成：${result.file}`)
+        logger.info(`平台：${result.platforms.join(', ')}`)
+      }
+      else {
+        logger.log(result.content)
+      }
+
       return 0
     }
 

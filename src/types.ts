@@ -535,6 +535,25 @@ export interface DoctorResult {
   checks: DoctorCheck[]
 }
 
+/** init 请求 */
+export interface InitOptions extends UploadOptions {
+  /** 目标配置文件，默认 wotci.config.ts */
+  configFile?: string
+  /** 生成的平台，缺省自动探测产物目录 */
+  platforms?: PlatformInput[]
+  /** 覆盖已有文件 */
+  force?: boolean
+  /** 只输出内容，不写文件 */
+  dryRun?: boolean
+}
+
+export interface InitResult {
+  file: string
+  content: string
+  platforms: Platform[]
+  written: boolean
+}
+
 /** doctor 请求 */
 export interface DoctorRequest extends UploadOptions {
   config?: UserConfig

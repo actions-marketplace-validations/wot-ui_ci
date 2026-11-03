@@ -7,6 +7,7 @@
 - 支持微信、支付宝、钉钉三端小程序上传
 - 微信上传链路基于 `miniprogram-ci` 2.x
 - 提供 CLI（`wotci`）与 JS API（`upload`、`uploadPlatform`、`uploadWeixin` 等）
+- 支持 `wotci init` 自动生成配置
 - 支持包体积预算与发布体积趋势
 - 支持 `release` 一步完成构建、多平台上传、历史记录与 PR 评论
 - 支持微信、支付宝预览二维码（文件 / 终端 / URL）
@@ -106,6 +107,38 @@ export default defineConfig({
 - `--dry-run` 时 `auto` 不发起网络请求，使用 `package.json` 版本递增
 
 版本策略会应用到 `upload`、`uploadMany`、`release`，只影响本次上传的版本号。
+
+## 初始化配置（init）
+
+```sh
+wotci init
+wotci init --platform weixin,alipay
+wotci init --config ci.config.ts
+wotci init --force
+wotci init --dry-run --json
+```
+
+- 自动探测 `dist/build/mp-weixin`、`dist/build/mp-alipay`、`dist/build/mp-dingtalk` 等产物目录
+- 探测不到平台时生成三端模板
+- 默认写 `wotci.config.ts`，指定 `.js` 时生成 JS 配置
+- 已存在配置文件时默认拒绝，`--force` 覆盖
+- `--dry-run` 只输出内容，不写文件
+- `--json` 输出生成路径、平台与内容
+
+生成后按 env 注入 appid / 私钥路径即可，例如：
+
+```ts
+export default defineConfig(({ env, packageJson }) => ({
+  version: env.WOTCI_VERSION ?? packageJson?.version,
+  weixin: {
+    appid: env.WEIXIN_APPID!,
+    projectPath: env.WEIXIN_PROJECT_PATH ?? 'dist/build/mp-weixin',
+    privateKeyPath: env.WEIXIN_PRIVATE_KEY_PATH!,
+    robot: 1,
+    setting: { useProjectConfig: true },
+  },
+}))
+```
 
 ## 包体积预算
 
