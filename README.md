@@ -7,6 +7,7 @@
 - 支持微信、支付宝、钉钉三端小程序上传
 - 微信上传链路基于 `miniprogram-ci` 2.x
 - 提供 CLI（`wotci`）与 JS API（`upload`、`uploadPlatform`、`uploadWeixin` 等）
+- 提供 GitHub Action，可直接在 workflow 中预览/上传/发布
 - 支持 Vite / uni-app 插件，在构建后自动预览或上传
 - 支持 `wotci init` 自动生成配置
 - 支持支付宝体验版设置/取消与版本删除
@@ -109,6 +110,79 @@ export default defineConfig({
 - `--dry-run` 时 `auto` 不发起网络请求，使用 `package.json` 版本递增
 
 版本策略会应用到 `upload`、`uploadMany`、`release`，只影响本次上传的版本号。
+
+## GitHub Action
+
+仓库根目录提供 composite action：
+
+```yaml
+name: Preview
+
+on:
+  pull_request:
+
+permissions:
+  contents: read
+  pull-requests: write
+  issues: write
+
+jobs:
+  preview:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+      - run: pnpm build
+
+      - uses: wot-ui/ci@v0.3.0
+        with:
+          command: preview
+          platform: weixin
+          config: wotci.config.ts
+          summary: ${{ env.GITHUB_STEP_SUMMARY }}
+        env:
+          WEIXIN_APPID: ${{ secrets.WEIXIN_APPID }}
+          WEIXIN_PRIVATE_KEY_PATH: keys/weixin.private.key
+```
+
+发布：
+
+```yaml
+- uses: wot-ui/ci@v0.3.0
+  with:
+    command: release
+    platform: weixin,alipay
+    summary: ${{ env.GITHUB_STEP_SUMMARY }}
+    pr-comment: auto
+```
+
+主要 inputs：
+
+| input | 说明 |
+| --- | --- |
+| `command` | `upload`（默认）、`preview`、`release`、`doctor`、`version latest` 等 |
+| `platform` | 逗号分隔平台，如 `weixin,alipay` |
+| `config` | 配置文件路径 |
+| `working-directory` | 执行目录，默认 `.` |
+| `summary` | `$GITHUB_STEP_SUMMARY` 或指定 Markdown 文件 |
+| `json` / `dry-run` / `network` / `yes` | 透传对应 CLI 参数 |
+| `version` | experience / version delete 的目标版本 |
+| `pr-comment` | `auto` / `true` / `false` |
+| `history` | `auto` / `true` / `false` |
+| `args` | 额外 CLI 参数 |
+| `install-dependencies` | 是否在 action 内执行安装 |
+| `package-version` | 本地未安装时通过 npx 使用的 `@wot-ui/ci` 版本 |
+
+说明：
+
+- action 优先使用项目内的 `node_modules/.bin/wotci`，否则回退到 `npx @wot-ui/ci@<package-version>`
+- 推荐把 `@wot-ui/ci` 加进 devDependencies，这样配置文件里的 `import { defineConfig } from '@wot-ui/ci'` 才能正常解析
+- `release` 的 PR 评论需要 `pull-requests: write` 和 `issues: write`
 
 ## Vite / uni-app 插件
 

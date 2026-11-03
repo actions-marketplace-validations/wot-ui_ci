@@ -423,7 +423,7 @@ wotci doctor --json
 
 ### v0.7 — 集成（进行中）
 
-> 状态：`@wot-ui/ci/vite` 插件已实现；GitHub Action、watch、monorepo、插件 API 待做。
+> 状态：`@wot-ui/ci/vite` 插件、GitHub Action 已实现；watch、monorepo、插件 API 待做。
 
 ### v0.8+ — 扩展集成
 
