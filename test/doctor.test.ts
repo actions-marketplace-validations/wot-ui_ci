@@ -128,7 +128,10 @@ describe('runDoctor', () => {
 
     expect(result.ok).toBe(false)
     expect(result.checks).toContainEqual(expect.objectContaining({ id: 'weixin-project-config', status: 'error' }))
-    expect(result.checks).toContainEqual(expect.objectContaining({ id: 'weixin-key-permission', status: 'warn' }))
+    expect(result.checks).toContainEqual(expect.objectContaining({
+      id: 'weixin-key-permission',
+      status: process.platform === 'win32' ? 'ok' : 'warn',
+    }))
     expect(result.checks).toContainEqual(expect.objectContaining({ id: 'weixin-key-format', status: 'warn' }))
   })
 

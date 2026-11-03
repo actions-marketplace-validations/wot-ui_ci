@@ -161,10 +161,15 @@ async function checkWeixin(config: WotciConfig, cwd: string, add: AddCheck): Pro
   if (keyExists) {
     try {
       const info = await stat(privateKeyPath)
-      if (process.platform !== 'win32' && (info.mode & 0o077) !== 0)
+      if (process.platform === 'win32') {
+        add('ok', 'weixin-key-permission', '微信私钥权限', 'Windows 跳过权限检查')
+      }
+      else if ((info.mode & 0o077) !== 0) {
         add('warn', 'weixin-key-permission', '微信私钥权限', '私钥对同组/其他用户可读，建议 chmod 600')
-      else
+      }
+      else {
         add('ok', 'weixin-key-permission', '微信私钥权限', '权限正常')
+      }
 
       const content = await readFile(privateKeyPath, 'utf8')
       add(
