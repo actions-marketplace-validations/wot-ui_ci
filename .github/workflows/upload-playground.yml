@@ -45,11 +45,11 @@ on:
       - 'src/**'
       - 'scripts/**'
       - 'playground/**'
-      - 'action.yml'
-      - 'package.json'
-      - 'pnpm-lock.yaml'
-      - 'pnpm-workspace.yaml'
-      - '.github/workflows/upload-playground.yml'
+      - action.yml
+      - package.json
+      - pnpm-lock.yaml
+      - pnpm-workspace.yaml
+      - .github/workflows/upload-playground.yml
 
 permissions:
   contents: read
