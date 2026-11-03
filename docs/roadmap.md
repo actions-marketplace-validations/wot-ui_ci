@@ -421,7 +421,11 @@ wotci doctor --json
 
 这些能力更偏「诊断/构建」，建议在预览和批量稳定后再做。
 
-### v0.7+ — 集成（P3）
+### v0.7 — 集成（进行中）
+
+> 状态：`@wot-ui/ci/vite` 插件已实现；GitHub Action、watch、monorepo、插件 API 待做。
+
+### v0.8+ — 扩展集成
 
 - `@wot-ui/ci/vite`：uni-app 构建完成后自动预览/上传
 - GitHub Action：复用 composite action，直接输出 summary 与二维码 artifact

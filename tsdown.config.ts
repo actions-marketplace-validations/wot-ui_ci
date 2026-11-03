@@ -14,6 +14,7 @@ export default defineConfig({
     'src/bin.ts',
     'src/index.ts',
     'src/cli.ts',
+    'src/vite.ts',
   ],
   dts: true,
   exports: true,

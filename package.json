@@ -25,6 +25,7 @@
     ".": "./dist/index.mjs",
     "./bin": "./dist/bin.mjs",
     "./cli": "./dist/cli.mjs",
+    "./vite": "./dist/vite.mjs",
     "./package.json": "./package.json"
   },
   "main": "./dist/index.mjs",
@@ -58,6 +59,14 @@
     "upload:playground:weixin": "pnpm --dir playground build:mp-weixin && pnpm exec tsx ./src/bin.ts --cwd playground --config wotci.config.ts --platform weixin",
     "upload:playground:alipay": "pnpm --dir playground build:mp-alipay && pnpm exec tsx ./src/bin.ts --cwd playground --config wotci.config.ts --platform alipay",
     "upload:playground:dingtalk": "pnpm --dir playground build:mp-alipay && pnpm exec tsx ./src/bin.ts --cwd playground --config wotci.config.ts --platform dingtalk"
+  },
+  "peerDependencies": {
+    "vite": ">=5"
+  },
+  "peerDependenciesMeta": {
+    "vite": {
+      "optional": true
+    }
   },
   "dependencies": {
     "consola": "catalog:",

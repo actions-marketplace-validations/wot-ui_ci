@@ -7,6 +7,7 @@
 - 支持微信、支付宝、钉钉三端小程序上传
 - 微信上传链路基于 `miniprogram-ci` 2.x
 - 提供 CLI（`wotci`）与 JS API（`upload`、`uploadPlatform`、`uploadWeixin` 等）
+- 支持 Vite / uni-app 插件，在构建后自动预览或上传
 - 支持 `wotci init` 自动生成配置
 - 支持支付宝体验版设置/取消与版本删除
 - 支持包体积预算与发布体积趋势
@@ -108,6 +109,35 @@ export default defineConfig({
 - `--dry-run` 时 `auto` 不发起网络请求，使用 `package.json` 版本递增
 
 版本策略会应用到 `upload`、`uploadMany`、`release`，只影响本次上传的版本号。
+
+## Vite / uni-app 插件
+
+```ts
+// vite.config.ts
+import uni from '@dcloudio/vite-plugin-uni'
+import { wotciPlugin } from '@wot-ui/ci/vite'
+import { defineConfig } from 'vite'
+
+export default defineConfig({
+  plugins: [
+    uni(),
+    wotciPlugin({
+      action: 'preview', // 默认 preview；可改为 upload
+      preview: {
+        qrFormat: 'image',
+      },
+    }),
+  ],
+})
+```
+
+- `apply: 'build'`，只在构建时执行，`dev` 不会触发
+- 从 `UNI_PLATFORM` 自动推断平台（`mp-weixin` / `mp-alipay` / `mp-dingtalk`）
+- 也可以用 `platforms` 显式指定
+- 默认 `action: 'preview'`，避免构建时误发布；需要自动上传时设 `action: 'upload'`
+- `failOnError` 默认 `true`，失败会让构建失败
+- 支持 `configFile`、`config`、`concurrency`、`dryRun`、`onResult`
+- 插件入口：`@wot-ui/ci/vite`
 
 ## 初始化配置（init）
 
