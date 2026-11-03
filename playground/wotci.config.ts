@@ -47,7 +47,8 @@ export default defineConfig(({ env, packageJson }) => ({
     ? {
         toolId: env.ALIPAY_TOOL_ID,
         appid: env.ALIPAY_APPID,
-        privateKey: env.ALIPAY_PRIVATE_KEY!,
+        privateKey: resolveOptionalString(env.ALIPAY_PRIVATE_KEY),
+        privateKeyPath: resolveOptionalString(env.ALIPAY_PRIVATE_KEY_PATH),
         projectPath: resolvePlaygroundPath(env.ALIPAY_PROJECT_PATH, 'dist/build/mp-alipay'),
         autoincrement: resolveBoolean(env.ALIPAY_AUTOINCREMENT) ?? true,
       }

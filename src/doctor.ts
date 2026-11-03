@@ -142,17 +142,19 @@ async function checkWeixin(config: WotciConfig, cwd: string, add: AddCheck): Pro
   add(await isDirectory(projectPath) ? 'ok' : 'error', 'weixin-project', '微信产物目录', projectPath)
 
   if (await isDirectory(projectPath)) {
+    const projectConfigExists = await exists(resolveFromCwd(projectPath, 'project.config.json'))
     add(
-      await exists(resolveFromCwd(projectPath, 'project.config.json')) ? 'ok' : 'error',
+      projectConfigExists ? 'ok' : 'error',
       'weixin-project-config',
       '微信 project.config.json',
-      '上传必须有 project.config.json',
+      projectConfigExists ? '已找到 project.config.json' : '上传必须有 project.config.json',
     )
+    const appJsonExists = await exists(resolveFromCwd(projectPath, 'app.json'))
     add(
-      await exists(resolveFromCwd(projectPath, 'app.json')) ? 'ok' : 'warn',
+      appJsonExists ? 'ok' : 'warn',
       'weixin-app-json',
       '微信 app.json',
-      '未发现 app.json，请确认产物是否完整',
+      appJsonExists ? '已找到 app.json' : '未发现 app.json，请确认产物是否完整',
     )
   }
 
@@ -174,11 +176,12 @@ async function checkWeixin(config: WotciConfig, cwd: string, add: AddCheck): Pro
       }
 
       const content = await readFile(privateKeyPath, 'utf8')
+      const hasPemHeader = content.includes('-----BEGIN')
       add(
-        content.includes('-----BEGIN') ? 'ok' : 'warn',
+        hasPemHeader ? 'ok' : 'warn',
         'weixin-key-format',
         '微信私钥格式',
-        '未检测到 PEM 头，请确认是否为代码上传密钥',
+        hasPemHeader ? 'PEM 格式正常' : '未检测到 PEM 头，请确认是否为代码上传密钥',
       )
     }
     catch (error) {
@@ -246,11 +249,12 @@ async function checkAlipay(config: WotciConfig, cwd: string, add: AddCheck): Pro
   add(await isDirectory(projectPath) ? 'ok' : 'error', 'alipay-project', '支付宝产物目录', projectPath)
 
   if (await isDirectory(projectPath)) {
+    const appJsonExists = await exists(resolveFromCwd(projectPath, 'app.json'))
     add(
-      await exists(resolveFromCwd(projectPath, 'app.json')) ? 'ok' : 'warn',
+      appJsonExists ? 'ok' : 'warn',
       'alipay-app-json',
       '支付宝 app.json',
-      '未发现 app.json，请确认产物是否完整',
+      appJsonExists ? '已找到 app.json' : '未发现 app.json，请确认产物是否完整',
     )
   }
 

@@ -86,6 +86,16 @@ describe('runDoctor', () => {
 
     expect(result.ok).toBe(true)
     expect(result.checks.some(check => check.id === 'weixin-key' && check.status === 'ok')).toBe(true)
+    expect(result.checks).toContainEqual(expect.objectContaining({
+      id: 'weixin-app-json',
+      message: '已找到 app.json',
+      status: 'ok',
+    }))
+    expect(result.checks).toContainEqual(expect.objectContaining({
+      id: 'weixin-key-format',
+      message: 'PEM 格式正常',
+      status: 'ok',
+    }))
   })
 
   it('没有平台配置时错误', async () => {
