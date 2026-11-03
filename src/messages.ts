@@ -86,6 +86,9 @@ export function createCliHelpText(): string {
     '      --no-history       不写发布历史',
     '      --pr-comment       强制尝试评论 PR',
     '      --no-pr-comment    不评论 PR',
+    '      --json             以 JSON 输出到 stdout，日志走 stderr',
+    '      --summary <file>   写入 CI Markdown summary',
+    '      --concurrency <n>  批量执行并发数，默认 1',
     '  -h, --help             查看帮助信息',
   ].join('\n')
 }

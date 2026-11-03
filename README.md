@@ -78,6 +78,68 @@ wotci close -p weixin --quit
 
 上传成功退出码为 `0`，失败为 `1`，适合直接在 CI 中使用。
 
+## 批量执行与 CI 输出
+
+上传和预览都支持多平台批量执行：
+
+```sh
+# 执行配置中所有平台
+wotci upload --all
+wotci preview --all
+
+# 指定多个平台
+wotci upload -p weixin,alipay
+
+# 控制并发（默认 1，串行）
+wotci upload --all --concurrency 2
+
+# 只校验，不调用 SDK
+wotci upload --all --dry-run
+
+# JSON 输出
+wotci upload --all --json
+
+# 写入 GitHub Step Summary
+wotci upload --all --summary "$GITHUB_STEP_SUMMARY"
+```
+
+- 单个平台失败不中断其它平台，最终退出码为 `1`
+- `--dry-run` 只做本地校验：配置、产物目录、私钥、版本，不调用 SDK、不请求网络、不写文件
+- `--json` 时 stdout 只输出 JSON，日志走 stderr；SDK 写到 stdout 的日志会被自动转发到 stderr
+- `--summary` 生成 Markdown 表格，可直接写入 `$GITHUB_STEP_SUMMARY`
+
+JSON 结构：
+
+```json
+{
+  "schemaVersion": 1,
+  "command": "upload",
+  "dryRun": false,
+  "ok": false,
+  "durationMs": 12000,
+  "results": [
+    {
+      "platform": "weixin",
+      "ok": true,
+      "durationMs": 8000,
+      "result": {
+        "version": "1.2.3",
+        "sizes": { "total": 2048000, "main": 1024000 },
+        "message": "微信小程序上传成功"
+      }
+    },
+    {
+      "platform": "alipay",
+      "ok": false,
+      "durationMs": 4000,
+      "error": { "code": "UPLOAD_ERROR", "message": "支付宝小程序上传失败" }
+    }
+  ]
+}
+```
+
+SDK raw 返回值不会进入 JSON，避免循环引用和超大对象。
+
 ## 预览二维码
 
 ```sh
@@ -478,6 +540,32 @@ interface UploadResult {
   message: string
   raw: unknown // SDK 原始返回值
 }
+```
+
+### 批量上传 / 预览
+
+```ts
+import { previewMany, uploadMany } from '@wot-ui/ci'
+
+const result = await uploadMany({
+  cwd: process.cwd(),
+  platforms: ['weixin', 'alipay'],
+  concurrency: 1,
+})
+
+console.log(result.ok)
+console.log(result.results)
+
+const dryRun = await uploadMany({
+  cwd: process.cwd(),
+  dryRun: true,
+})
+
+const previews = await previewMany({
+  cwd: process.cwd(),
+  platforms: ['weixin'],
+  qrFormat: 'image',
+})
 ```
 
 ### 发布编排

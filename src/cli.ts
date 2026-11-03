@@ -1,5 +1,6 @@
 import type { IdeAction, PlatformInput } from './types'
 import process from 'node:process'
+import { previewMany, uploadMany } from './batch'
 import { loadConfig } from './config'
 import { ConfigError, formatErrorReport, formatErrorStack, WotCIError } from './errors'
 import { autoIde, closeIde, getIdeStatus, openIde, previewIde } from './ide'
@@ -11,6 +12,8 @@ import {
   createCliPreviewStartMessage,
   createCliUploadStartMessage,
 } from './messages'
+import { renderBatchJson } from './output/json'
+import { renderBatchSummary, writeBatchSummary } from './output/summary'
 import { previewPlatform } from './preview'
 import { release } from './release'
 import { uploadPlatform } from './upload'
@@ -28,6 +31,7 @@ export interface ParsedCliArgs {
   all?: boolean
   build?: string
   command?: CliCommand
+  concurrency?: number
   configFile?: string
   cwd?: string
   desc?: string
@@ -37,6 +41,7 @@ export interface ParsedCliArgs {
   history?: boolean
   historyFile?: string
   infoOutput?: string
+  json?: boolean
   lang?: 'zh' | 'en'
   page?: string
   pageQuery?: string
@@ -50,6 +55,7 @@ export interface ParsedCliArgs {
   robot?: number
   scene?: string
   skipBuild?: boolean
+  summary?: string
   ticket?: string
   trustProject?: boolean
 }
@@ -57,25 +63,38 @@ export interface ParsedCliArgs {
 const CLI_COMMANDS = new Set<CliCommand>(['upload', 'release', 'preview', 'open', 'close', 'auto'])
 
 export async function runCli(argv: string[] = process.argv.slice(2), options: RunCliOptions = {}): Promise<number> {
-  const logger = createCliLogger(options)
+  let logger = createCliLogger(options)
 
   try {
     const args = parseCliArgs(argv)
     const command = args.command ?? 'upload'
+    const batchRequested = (command === 'upload' || command === 'preview')
+      && (Boolean(args.all)
+        || Boolean(args.platform?.includes(','))
+        || Boolean(args.json)
+        || Boolean(args.summary)
+        || Boolean(args.dryRun)
+        || args.concurrency !== undefined)
+
+    if (args.json) {
+      const stderrWriter = options.stderr
+        ?? ((message: string) => process.stderr.write(`${message}\n`))
+      logger = createCliLogger({ stderr: stderrWriter, stdout: stderrWriter })
+    }
 
     if (args.help) {
       logger.log(createCliHelpText())
       return 0
     }
 
-    if (!args.platform && command !== 'release') {
+    if (!args.platform && command !== 'release' && !batchRequested) {
       logger.error('缺少必填参数：--platform')
       logger.log(createCliHelpText())
       return 1
     }
 
-    // release 可以不带 --platform，这里仅占位，后续分支不会使用
-    const platform = command === 'release'
+    // release / 批量模式可以不带 --platform，这里仅占位，后续分支不会使用
+    const platform = command === 'release' || batchRequested
       ? 'weixin'
       : normalizePlatform(args.platform!)
     const loaded = await loadConfig({
@@ -84,6 +103,72 @@ export async function runCli(argv: string[] = process.argv.slice(2), options: Ru
     })
 
     logger.info(createCliConfigLoadedMessage(loaded.source, loaded.sourceFile))
+
+    if (batchRequested) {
+      const platforms = args.all
+        ? undefined
+        : args.platform?.split(',').map(item => item.trim()).filter(Boolean) as PlatformInput[] | undefined
+
+      if (!args.json)
+        logger.start(command === 'upload' ? '开始批量上传小程序...' : '开始批量生成预览二维码...')
+
+      const result = command === 'upload'
+        ? await uploadMany({
+            concurrency: args.concurrency,
+            config: loaded.config,
+            cwd: loaded.cwd,
+            dryRun: args.dryRun,
+            platforms,
+            redirectStdoutToStderr: args.json,
+          })
+        : await previewMany({
+            concurrency: args.concurrency,
+            config: loaded.config,
+            cwd: loaded.cwd,
+            dryRun: args.dryRun,
+            pagePath: args.page,
+            platforms,
+            qrFormat: args.qrFormat,
+            qrOutput: args.qrOutput,
+            query: args.query,
+            redirectStdoutToStderr: args.json,
+            scene: args.scene,
+          })
+
+      if (args.summary) {
+        const summaryPath = await writeBatchSummary(
+          args.summary,
+          renderBatchSummary(result, command),
+          loaded.cwd,
+        )
+        logger.info(`summary 已写入：${summaryPath}`)
+      }
+
+      if (args.json) {
+        const json = renderBatchJson(result, command, {
+          source: loaded.source,
+          ...(loaded.sourceFile ? { sourceFile: loaded.sourceFile } : {}),
+        })
+        const writeStdout = options.stdout ?? ((message: string) => process.stdout.write(message))
+        writeStdout(json)
+      }
+      else {
+        for (const item of result.results) {
+          const message = item.error?.message
+            ?? (item.result as { message?: string } | undefined)?.message
+            ?? (item.ok ? '成功' : '失败')
+          if (item.ok)
+            logger.success(`[${item.platform}] ${message}`)
+          else
+            logger.error(`[${item.platform}] ${message}`)
+        }
+        if (result.dryRun)
+          logger.log(`dry-run：共 ${result.results.length} 个平台`)
+        logger.success(result.ok ? `${command === 'upload' ? '上传' : '预览'}完成` : `${command === 'upload' ? '上传' : '预览'}失败`)
+      }
+
+      return result.ok ? 0 : 1
+    }
 
     if (command === 'release') {
       logger.start('开始构建并发布小程序...')
@@ -351,6 +436,15 @@ export function parseCliArgs(argv: string[]): ParsedCliArgs {
       case '--no-pr-comment':
         parsed.prComment = false
         break
+      case '--json':
+        parsed.json = true
+        break
+      case '--summary':
+        parsed.summary = readOptionValue(argv, ++index, current)
+        break
+      case '--concurrency':
+        parsed.concurrency = readConcurrency(argv, ++index, current)
+        break
       default:
         throw new ConfigError(`未知参数：${current}`)
     }
@@ -387,6 +481,16 @@ function readQrFormat(
     throw new ConfigError(`参数 ${optionName} 必须是 terminal、image 或 base64：${raw}`)
 
   return raw
+}
+
+function readConcurrency(argv: string[], index: number, optionName: string): number {
+  const raw = readOptionValue(argv, index, optionName)
+  const value = Number(raw)
+
+  if (!Number.isInteger(value) || value < 1)
+    throw new ConfigError(`参数 ${optionName} 必须是大于等于 1 的整数：${raw}`)
+
+  return value
 }
 
 function readRobot(argv: string[], index: number, optionName: string): number {

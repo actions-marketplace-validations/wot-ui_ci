@@ -391,3 +391,36 @@ describe('release 参数', () => {
     expect(createCliHelpText()).toContain('--pr-comment')
   })
 })
+
+describe('批量参数', () => {
+  it('解析 --all / --json / --summary / --concurrency', () => {
+    expect(parseCliArgs([
+      'upload',
+      '--all',
+      '--json',
+      '--summary',
+      'out/summary.md',
+      '--concurrency',
+      '3',
+      '--dry-run',
+    ])).toEqual({
+      all: true,
+      command: 'upload',
+      concurrency: 3,
+      dryRun: true,
+      json: true,
+      summary: 'out/summary.md',
+    })
+  })
+
+  it('非法并发数抛出错误', () => {
+    expect(() => parseCliArgs(['upload', '--concurrency', '0'])).toThrow('必须是大于等于 1 的整数')
+  })
+
+  it('帮助信息包含批量参数', () => {
+    const help = createCliHelpText()
+    expect(help).toContain('--json')
+    expect(help).toContain('--summary')
+    expect(help).toContain('--concurrency')
+  })
+})

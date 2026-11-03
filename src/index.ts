@@ -1,3 +1,4 @@
+import { previewMany, uploadMany } from './batch'
 import {
   CONFIG_FILE_NAMES,
   defineConfig,
@@ -20,6 +21,8 @@ import {
 import { autoIde, closeIde, getIdeStatus, openIde, previewIde } from './ide'
 import { runAlipayIde } from './ide/alipay'
 import { autoWeixinIde, getWeixinIdeStatus, previewWeixinIde, runWeixinIde } from './ide/weixin'
+import { renderBatchJson } from './output/json'
+import { renderBatchSummary } from './output/summary'
 import { previewAlipay, uploadAlipay } from './platforms/alipay'
 import { uploadDingTalk } from './platforms/dingtalk'
 import { previewWeixin, uploadWeixin } from './platforms/weixin'
@@ -69,9 +72,13 @@ export {
 }
 export {
   normalizePlatform,
+  previewMany,
+  renderBatchJson,
+  renderBatchSummary,
   upload,
   uploadAlipay,
   uploadDingTalk,
+  uploadMany,
   uploadPlatform,
   uploadWeixin,
 }
@@ -86,6 +93,9 @@ export type {
   AlipayUploadRawResult,
   AnyPreviewResult,
   AnyUploadResult,
+  BatchItemResult,
+  BatchRequest,
+  BatchResult,
   CIConfig,
   ConfigFactory,
   ConfigFactoryContext,
@@ -108,6 +118,8 @@ export type {
   PackageJsonLike,
   Platform,
   PlatformInput,
+  PlatformPlan,
+  PlatformPlanCheck,
   PreviewOptions,
   PreviewQrCode,
   PreviewRequest,
@@ -121,6 +133,7 @@ export type {
   ReleasePlatformResult,
   ReleaseRequest,
   ReleaseResult,
+  SerializedError,
   UploadOptions,
   UploadRequest,
   UploadResult,
@@ -164,8 +177,12 @@ const wotci = {
   previewIde,
   previewWeixinIde,
   previewPlatform,
+  previewMany,
   previewWeixin,
   release,
+  renderBatchJson,
+  renderBatchSummary,
+  uploadMany,
   runAlipayIde,
   runWeixinIde,
   upload,

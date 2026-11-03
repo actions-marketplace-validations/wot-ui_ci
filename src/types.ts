@@ -438,6 +438,60 @@ export interface ReleaseHistoryRecord {
   git?: ReleaseGitInfo
 }
 
+/** 序列化后的错误 */
+export interface SerializedError {
+  code: string
+  message: string
+  cause?: string[]
+}
+
+/** 批量执行中单个平台的结果 */
+export interface BatchItemResult<T = unknown> {
+  platform: Platform
+  ok: boolean
+  durationMs: number
+  result?: T
+  error?: SerializedError
+}
+
+/** 批量执行结果 */
+export interface BatchResult<T = unknown> {
+  ok: boolean
+  dryRun: boolean
+  durationMs: number
+  results: Array<BatchItemResult<T>>
+}
+
+/** 批量执行请求 */
+export interface BatchRequest extends UploadRequest, PreviewOptions {
+  /** 目标平台，缺省使用配置中已配置的平台 */
+  platforms?: PlatformInput[]
+  /** 并发数，默认 1（串行） */
+  concurrency?: number
+  /** 只校验并输出计划 */
+  dryRun?: boolean
+  /** JSON 模式下把 SDK 写到 stdout 的日志转 stderr */
+  redirectStdoutToStderr?: boolean
+}
+
+/** 单个校验项 */
+export interface PlatformPlanCheck {
+  name: string
+  ok: boolean
+  message?: string
+}
+
+/** dry-run 计划 */
+export interface PlatformPlan {
+  platform: Platform
+  action: 'upload' | 'preview'
+  ok: boolean
+  checks: PlatformPlanCheck[]
+  version?: string
+  projectPath?: string
+  qrOutput?: string
+}
+
 /** JS 调用入口的选项 */
 export interface UploadRequest extends UploadOptions {
   /** 内联配置，传入后不再读取配置文件 */

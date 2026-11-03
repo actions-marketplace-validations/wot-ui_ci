@@ -10,8 +10,9 @@ import type {
 } from '../types'
 import { randomUUID } from 'node:crypto'
 import { loadConfig } from '../config'
-import { ConfigError, formatErrorReport, WotCIError } from '../errors'
+import { ConfigError } from '../errors'
 import { uploadPlatform } from '../upload'
+import { serializeError } from '../utils/error'
 import { normalizePlatform } from '../utils/platform'
 import { runShellCommand } from './command'
 import { readGitInfo } from './git'
@@ -209,19 +210,5 @@ function createHistoryRecord(result: ReleaseResult): ReleaseHistoryRecord {
     ok: result.ok,
     platforms: result.platforms,
     version: result.version,
-  }
-}
-
-function serializeError(error: unknown): {
-  code: string
-  message: string
-  cause?: string[]
-} {
-  const report = formatErrorReport(error)
-
-  return {
-    code: error instanceof WotCIError ? error.code : 'RELEASE_ERROR',
-    message: report[0],
-    ...(report.length > 1 ? { cause: report.slice(1) } : {}),
   }
 }
