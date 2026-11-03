@@ -13,14 +13,14 @@ import { access, mkdir, readFile } from 'node:fs/promises'
 import path from 'node:path'
 import process from 'node:process'
 import * as weixinCIModule from 'miniprogram-ci'
-import { PreviewError, UploadError } from '../errors'
+import { PreviewError, UploadError, VersionError } from '../errors'
 import { appendDesc } from '../messages'
 import { isDirectory, resolveFromCwd } from '../utils/path'
 
 type WeixinCI = typeof import('miniprogram-ci')
 
 /** Node 对 CJS 包同时提供命名导出与 default 导出，两种形态都兼容 */
-function resolveWeixinCI(): Pick<WeixinCI, 'Project' | 'preview' | 'upload'> {
+function resolveWeixinCI(): Pick<WeixinCI, 'Project' | 'getLatestVersion' | 'preview' | 'upload'> {
   const candidates: unknown[] = [
     weixinCIModule,
     (weixinCIModule as { default?: unknown }).default,
@@ -33,14 +33,65 @@ function resolveWeixinCI(): Pick<WeixinCI, 'Project' | 'preview' | 'upload'> {
     const value = candidate as Partial<WeixinCI>
     if (
       typeof value.Project === 'function'
+      && typeof value.getLatestVersion === 'function'
       && typeof value.preview === 'function'
       && typeof value.upload === 'function'
     ) {
-      return { Project: value.Project, preview: value.preview, upload: value.upload }
+      return {
+        Project: value.Project,
+        getLatestVersion: value.getLatestVersion,
+        preview: value.preview,
+        upload: value.upload,
+      }
     }
   }
 
   throw new UploadError('miniprogram-ci 导出格式不受支持')
+}
+
+export async function getWeixinLatestVersion(
+  config: WotciConfig,
+  options: UploadOptions = {},
+): Promise<{ latest?: string, grayReleaseVersion?: string }> {
+  const weixin = config.weixin
+  if (!weixin)
+    throw new VersionError('缺少微信小程序配置（weixin）')
+
+  const cwd = options.cwd ?? process.cwd()
+  const projectPath = resolveFromCwd(cwd, weixin.projectPath)
+  const privateKeyPath = resolveFromCwd(cwd, weixin.privateKeyPath)
+
+  try {
+    await access(privateKeyPath)
+  }
+  catch (error) {
+    throw new VersionError(`微信私钥文件不存在：${privateKeyPath}`, error)
+  }
+
+  if (!await isDirectory(projectPath))
+    throw new VersionError(`微信小程序产物目录不存在：${projectPath}`)
+
+  try {
+    const ci = resolveWeixinCI()
+    const project = new ci.Project({
+      appid: weixin.appid,
+      ignores: weixin.ignores,
+      privateKeyPath,
+      projectPath,
+      type: weixin.type ?? 'miniProgram',
+    })
+    const raw = await ci.getLatestVersion({ project })
+
+    return {
+      ...(raw.latestVersion ? { latest: raw.latestVersion } : {}),
+      ...(raw.grayReleaseVersion ? { grayReleaseVersion: raw.grayReleaseVersion } : {}),
+    }
+  }
+  catch (error) {
+    if (error instanceof VersionError)
+      throw error
+    throw new VersionError('获取微信线上版本失败', error)
+  }
 }
 
 export async function uploadWeixin(

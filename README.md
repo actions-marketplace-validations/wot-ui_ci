@@ -78,6 +78,34 @@ wotci close -p weixin --quit
 
 上传成功退出码为 `0`，失败为 `1`，适合直接在 CI 中使用。
 
+## 版本查询与策略
+
+```sh
+wotci version latest -p weixin
+wotci version latest -p alipay
+wotci version list -p alipay
+wotci version latest -p weixin --json
+```
+
+配置：
+
+```ts
+export default defineConfig({
+  versionStrategy: { type: 'auto', bump: 'patch' },
+  // 或 { type: 'fixed', version: '1.2.3' }
+  // 或 { type: 'package' }
+})
+```
+
+- `fixed`：使用配置版本
+- `package`：读取 `package.json` 的 version
+- `auto`：查询线上最新版本后本地递增，不会修改 `package.json`
+- 微信取 `getLatestVersion`，支付宝取 `getUploadedVersion`
+- 钉钉没有版本查询能力，会回退到 `package.json` / 配置版本
+- `--dry-run` 时 `auto` 不发起网络请求，使用 `package.json` 版本递增
+
+版本策略会应用到 `upload`、`uploadMany`、`release`，只影响本次上传的版本号。
+
 ## 批量执行与 CI 输出
 
 上传和预览都支持多平台批量执行：
@@ -540,6 +568,21 @@ interface UploadResult {
   message: string
   raw: unknown // SDK 原始返回值
 }
+```
+
+### 版本查询
+
+```ts
+import { getLatestVersion, getVersionList, resolveVersion } from '@wot-ui/ci'
+
+const latest = await getLatestVersion('weixin', { cwd: process.cwd() })
+const list = await getVersionList('alipay', { cwd: process.cwd() })
+
+const resolution = await resolveVersion(loaded.config, {
+  cwd: loaded.cwd,
+  packageJson: loaded.packageJson,
+})
+console.log(resolution.version, resolution.source)
 ```
 
 ### 批量上传 / 预览

@@ -189,6 +189,33 @@ export interface WotciConfig {
   dd?: DingtalkConfig
   /** release 编排配置 */
   release?: ReleaseConfig
+  /** 版本号策略，不会修改 package.json */
+  versionStrategy?: VersionStrategy
+}
+
+export type VersionBump = 'major' | 'minor' | 'patch'
+
+/** 版本号策略 */
+export type VersionStrategy
+  = | { type: 'fixed', version?: string }
+    | { type: 'package' }
+    | { type: 'auto', bump: VersionBump }
+
+/** 支付宝版本列表项 */
+export interface VersionRecord {
+  version: string
+  description?: string
+  status?: string
+  createTime?: string
+  operator?: string
+}
+
+/** 版本查询结果 */
+export interface VersionInfo {
+  platform: Platform
+  latest?: string
+  grayReleaseVersion?: string
+  versions?: VersionRecord[]
 }
 
 /** release 编排配置 */
@@ -460,6 +487,20 @@ export interface BatchResult<T = unknown> {
   dryRun: boolean
   durationMs: number
   results: Array<BatchItemResult<T>>
+}
+
+/** 版本策略解析结果 */
+export interface VersionResolution {
+  version?: string
+  source: 'fixed' | 'package' | 'auto' | 'none'
+}
+
+/** 版本查询请求 */
+export interface VersionRequest extends UploadOptions {
+  /** 内联配置，传入后不再读取配置文件 */
+  config?: UserConfig
+  /** 显式指定的配置文件 */
+  configFile?: string
 }
 
 /** 批量执行请求 */

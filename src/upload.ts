@@ -10,6 +10,7 @@ import { uploadAlipay } from './platforms/alipay'
 import { uploadDingTalk } from './platforms/dingtalk'
 import { uploadWeixin } from './platforms/weixin'
 import { normalizePlatform } from './utils/platform'
+import { applyVersion, resolveVersion } from './version-strategy'
 
 /** 使用已加载的配置上传到指定平台 */
 export async function uploadPlatform(
@@ -55,5 +56,10 @@ export async function upload(
     cwd: request.cwd,
   })
 
-  return uploadPlatform(platform, loaded.config, { cwd: loaded.cwd })
+  const resolution = await resolveVersion(loaded.config, {
+    cwd: loaded.cwd,
+    packageJson: loaded.packageJson,
+  })
+
+  return uploadPlatform(platform, applyVersion(loaded.config, resolution), { cwd: loaded.cwd })
 }

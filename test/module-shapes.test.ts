@@ -39,12 +39,14 @@ describe('miniprogram-ci 导出形态', () => {
     })
     const upload = vi.fn(async () => ({ subPackageInfo: [] }))
     const preview = vi.fn(async () => ({ subPackageInfo: [] }))
+    const getLatestVersion = vi.fn(async () => ({ latestVersion: '1.0.0' }))
 
     vi.doMock('miniprogram-ci', () => ({
       Project: undefined,
+      getLatestVersion: undefined,
       preview: undefined,
       upload: undefined,
-      default: { Project, preview, upload },
+      default: { Project, getLatestVersion, preview, upload },
     }))
     const { uploadWeixin } = await import('../src/platforms/weixin')
 
@@ -57,7 +59,7 @@ describe('miniprogram-ci 导出形态', () => {
   it('导出缺少 Project / upload 时抛出 UploadError', async () => {
     const cwd = await createFixture()
 
-    vi.doMock('miniprogram-ci', () => ({ Project: undefined, preview: undefined, upload: undefined, default: undefined }))
+    vi.doMock('miniprogram-ci', () => ({ Project: undefined, getLatestVersion: undefined, preview: undefined, upload: undefined, default: undefined }))
     const { uploadWeixin } = await import('../src/platforms/weixin')
 
     await expect(uploadWeixin({ version: '1.0.0', weixin: weixinConfig }, { cwd }))
@@ -68,7 +70,7 @@ describe('miniprogram-ci 导出形态', () => {
   it('default 也不是对象时抛出 UploadError', async () => {
     const cwd = await createFixture()
 
-    vi.doMock('miniprogram-ci', () => ({ Project: undefined, preview: undefined, upload: undefined, default: 'not-a-module' }))
+    vi.doMock('miniprogram-ci', () => ({ Project: undefined, getLatestVersion: undefined, preview: undefined, upload: undefined, default: 'not-a-module' }))
     const { uploadWeixin } = await import('../src/platforms/weixin')
 
     await expect(uploadWeixin({ version: '1.0.0', weixin: weixinConfig }, { cwd }))

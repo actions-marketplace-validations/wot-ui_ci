@@ -6,6 +6,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
 const mocks = vi.hoisted(() => ({
   WeixinProject: vi.fn(),
+  getLatestVersion: vi.fn(),
   alipayPreview: vi.fn(),
   alipayUpload: vi.fn(),
   alipayUseDefaults: vi.fn(),
@@ -17,10 +18,12 @@ const mocks = vi.hoisted(() => ({
 
 vi.mock('miniprogram-ci', () => ({
   Project: mocks.WeixinProject,
+  getLatestVersion: mocks.getLatestVersion,
   preview: mocks.weixinPreview,
   upload: mocks.weixinUpload,
   default: {
     Project: mocks.WeixinProject,
+    getLatestVersion: mocks.getLatestVersion,
     preview: mocks.weixinPreview,
     upload: mocks.weixinUpload,
   },
@@ -60,6 +63,7 @@ const tempDirs: string[] = []
 
 beforeEach(() => {
   vi.clearAllMocks()
+  mocks.getLatestVersion.mockResolvedValue({ latestVersion: '1.0.0' })
   mocks.WeixinProject.mockImplementation(function (this: Record<string, unknown>, options: Record<string, unknown>) {
     this.options = options
   })

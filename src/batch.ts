@@ -16,6 +16,7 @@ import { uploadPlatform } from './upload'
 import { serializeError } from './utils/error'
 import { normalizePlatform } from './utils/platform'
 import { redirectStdoutToStderr } from './utils/stdout'
+import { applyVersion, resolveVersion } from './version-strategy'
 
 const PLATFORM_ORDER: Platform[] = ['weixin', 'alipay', 'dingtalk']
 
@@ -42,9 +43,16 @@ async function runBatch<TResult>(
     configFile: request.configFile,
     cwd: request.cwd,
   })
-  const config = loaded.config
   const cwd = loaded.cwd
-  const platforms = resolvePlatforms(request.platforms, config)
+  const platforms = resolvePlatforms(request.platforms, loaded.config)
+  const config = action === 'upload'
+    ? applyVersion(loaded.config, await resolveVersion(loaded.config, {
+        allowNetwork: !request.dryRun,
+        cwd,
+        packageJson: loaded.packageJson,
+        platforms,
+      }))
+    : loaded.config
 
   if (!platforms.length)
     throw new ConfigError('没有可执行的平台，请配置 weixin / alipay / dingtalk 或指定 platforms。')

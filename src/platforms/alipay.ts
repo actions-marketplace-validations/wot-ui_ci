@@ -6,6 +6,7 @@ import type {
   PreviewResult,
   UploadOptions,
   UploadResult,
+  VersionRecord,
   WotciConfig,
 } from '../types'
 
@@ -14,7 +15,7 @@ import { mkdir, readFile, writeFile } from 'node:fs/promises'
 import path from 'node:path'
 import process from 'node:process'
 import * as minidevModule from 'minidev'
-import { PreviewError, UploadError } from '../errors'
+import { PreviewError, UploadError, VersionError } from '../errors'
 import { appendDesc } from '../messages'
 import { isDirectory, resolveFromCwd } from '../utils/path'
 import { compareVersion } from '../utils/version'
@@ -26,6 +27,16 @@ interface MinidevRuntime {
         appId: string
         clientType: string
       }) => Promise<string>
+      getUploadedVersionList: (options: {
+        appId: string
+        clientType: string
+      }) => Promise<Array<{
+        appVersion?: string
+        versionDescription?: string
+        versionStatus?: string
+        createTime?: string
+        operateName?: string
+      }>>
     }
     upload: (options: {
       project: string
@@ -120,6 +131,86 @@ export async function uploadAlipay(
     if (error instanceof UploadError)
       throw error
     throw new UploadError('支付宝小程序上传失败', error)
+  }
+}
+
+export async function getAlipayLatestVersion(
+  config: WotciConfig,
+  options: UploadOptions = {},
+): Promise<string> {
+  const alipay = config.alipay
+  if (!alipay)
+    throw new VersionError('缺少支付宝小程序配置（alipay）')
+
+  const cwd = options.cwd ?? process.cwd()
+  const privateKey = await resolvePrivateKey(alipay, cwd).catch((error: unknown) => {
+    throw new VersionError('获取支付宝线上版本失败', error)
+  })
+  const runtime = resolveMinidevRuntime()
+
+  try {
+    runtime.useDefaults({
+      config: {
+        defaults: {
+          'alipay.authentication.privateKey': privateKey,
+          'alipay.authentication.toolId': alipay.toolId,
+        },
+      },
+    })
+
+    return await runtime.minidev.app.getUploadedVersion({
+      appId: alipay.appid,
+      clientType: alipay.clientType ?? 'alipay',
+    })
+  }
+  catch (error) {
+    if (error instanceof VersionError)
+      throw error
+    throw new VersionError('获取支付宝线上版本失败', error)
+  }
+}
+
+export async function getAlipayVersionList(
+  config: WotciConfig,
+  options: UploadOptions = {},
+): Promise<VersionRecord[]> {
+  const alipay = config.alipay
+  if (!alipay)
+    throw new VersionError('缺少支付宝小程序配置（alipay）')
+
+  const cwd = options.cwd ?? process.cwd()
+  const privateKey = await resolvePrivateKey(alipay, cwd).catch((error: unknown) => {
+    throw new VersionError('获取支付宝版本列表失败', error)
+  })
+  const runtime = resolveMinidevRuntime()
+
+  try {
+    runtime.useDefaults({
+      config: {
+        defaults: {
+          'alipay.authentication.privateKey': privateKey,
+          'alipay.authentication.toolId': alipay.toolId,
+        },
+      },
+    })
+
+    const rows = await runtime.minidev.app.getUploadedVersionList({
+      appId: alipay.appid,
+      clientType: alipay.clientType ?? 'alipay',
+    })
+
+    return rows.map(row => ({
+      ...(row.appVersion ? { version: row.appVersion } : {}),
+      ...(row.versionDescription ? { description: row.versionDescription } : {}),
+      ...(row.versionStatus ? { status: row.versionStatus } : {}),
+      ...(row.createTime ? { createTime: row.createTime } : {}),
+      ...(row.operateName ? { operator: row.operateName } : {}),
+    })) as VersionRecord[]
+  }
+  catch (error) {
+    if (error instanceof VersionError)
+      throw error
+    throw new VersionError('获取支付宝版本列表失败', error)
   }
 }
 

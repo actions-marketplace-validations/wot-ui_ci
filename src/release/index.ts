@@ -14,6 +14,7 @@ import { ConfigError } from '../errors'
 import { uploadPlatform } from '../upload'
 import { serializeError } from '../utils/error'
 import { normalizePlatform } from '../utils/platform'
+import { applyVersion, resolveVersion } from '../version-strategy'
 import { runShellCommand } from './command'
 import { readGitInfo } from './git'
 import { detectGitHubPullRequestContext, renderReleaseComment, upsertReleaseComment } from './github'
@@ -29,10 +30,15 @@ export async function release(request: ReleaseRequest = {}): Promise<ReleaseResu
     configFile: request.configFile,
     cwd: request.cwd,
   })
-  const config = loaded.config
   const cwd = loaded.cwd
-  const releaseConfig = config.release ?? {}
-  const platforms = resolvePlatforms(request.platforms, releaseConfig.platforms, config)
+  const releaseConfig = loaded.config.release ?? {}
+  const platforms = resolvePlatforms(request.platforms, releaseConfig.platforms, loaded.config)
+  const config = applyVersion(loaded.config, await resolveVersion(loaded.config, {
+    allowNetwork: !request.dryRun,
+    cwd,
+    packageJson: loaded.packageJson,
+    platforms,
+  }))
   const commands = resolveBuildCommands(request.buildCommand ?? releaseConfig.buildCommand)
   const skipBuild = request.skipBuild ?? false
   const dryRun = request.dryRun ?? false

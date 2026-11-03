@@ -449,3 +449,25 @@ describe('release 配置校验', () => {
     await expect(loadConfig({ cwd })).rejects.toThrow('release.platforms 必须是数组')
   })
 })
+
+describe('versionStrategy 配置校验', () => {
+  it('非法 type / bump 抛出 ConfigError', async () => {
+    const badType = await createProject({
+      type: 'module',
+      files: { 'wotci.config.js': `export default { versionStrategy: { type: 'bad' } }\n` },
+    })
+    await expect(loadConfig({ cwd: badType })).rejects.toThrow('versionStrategy.type 无效')
+
+    const badBump = await createProject({
+      type: 'module',
+      files: { 'wotci.config.js': `export default { versionStrategy: { type: 'auto', bump: 'bad' } }\n` },
+    })
+    await expect(loadConfig({ cwd: badBump })).rejects.toThrow('versionStrategy.bump 无效')
+
+    const notObject = await createProject({
+      type: 'module',
+      files: { 'wotci.config.js': `export default { versionStrategy: 'auto' }\n` },
+    })
+    await expect(loadConfig({ cwd: notObject })).rejects.toThrow('versionStrategy 必须是对象')
+  })
+})

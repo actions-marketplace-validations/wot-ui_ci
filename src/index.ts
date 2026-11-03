@@ -31,6 +31,8 @@ import { release } from './release'
 import { upload, uploadPlatform } from './upload'
 import { normalizePlatform } from './utils/platform'
 import { compareVersion } from './utils/version'
+import { getLatestVersion, getVersionList } from './version'
+import { applyVersion, bumpVersion, resolveVersion } from './version-strategy'
 
 export {
   CONFIG_FILE_NAMES,
@@ -71,6 +73,10 @@ export {
   runWeixinIde,
 }
 export {
+  applyVersion,
+  bumpVersion,
+  getLatestVersion,
+  getVersionList,
   normalizePlatform,
   previewMany,
   renderBatchJson,
@@ -138,6 +144,12 @@ export type {
   UploadRequest,
   UploadResult,
   UserConfig,
+  VersionBump,
+  VersionInfo,
+  VersionRecord,
+  VersionRequest,
+  VersionResolution,
+  VersionStrategy,
   WeixinConfig,
   WeixinIdeConfig,
   WeixinPreviewConfig,
@@ -164,8 +176,12 @@ const wotci = {
   WotCIError,
   autoIde,
   autoWeixinIde,
+  applyVersion,
+  bumpVersion,
   closeIde,
   compareVersion,
+  getLatestVersion,
+  getVersionList,
   defineConfig,
   getIdeStatus,
   getWeixinIdeStatus,
@@ -182,6 +198,7 @@ const wotci = {
   release,
   renderBatchJson,
   renderBatchSummary,
+  resolveVersion,
   uploadMany,
   runAlipayIde,
   runWeixinIde,

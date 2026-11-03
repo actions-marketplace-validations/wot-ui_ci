@@ -209,6 +209,21 @@ function normalizeConfig(config: WotciConfig, label: string): WotciConfig {
       throw new ConfigError(`${label}中的 ${key} 必须是对象`)
   }
 
+  if (config.versionStrategy !== undefined) {
+    if (!isPlainObject(config.versionStrategy))
+      throw new ConfigError(`${label}中的 versionStrategy 必须是对象`)
+
+    const type = config.versionStrategy.type
+    if (type !== 'fixed' && type !== 'package' && type !== 'auto')
+      throw new ConfigError(`${label}中的 versionStrategy.type 无效：${String(type)}`)
+
+    if (type === 'auto') {
+      const bump = config.versionStrategy.bump
+      if (bump !== 'major' && bump !== 'minor' && bump !== 'patch')
+        throw new ConfigError(`${label}中的 versionStrategy.bump 无效：${String(bump)}`)
+    }
+  }
+
   if (config.release !== undefined) {
     if (!isPlainObject(config.release))
       throw new ConfigError(`${label}中的 release 必须是对象`)

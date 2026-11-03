@@ -16,8 +16,10 @@ import { renderBatchJson } from './output/json'
 import { renderBatchSummary, writeBatchSummary } from './output/summary'
 import { previewPlatform } from './preview'
 import { release } from './release'
+import { renderReleaseComment } from './release/github'
 import { uploadPlatform } from './upload'
 import { normalizePlatform } from './utils/platform'
+import { applyVersion, resolveVersion } from './version-strategy'
 
 export interface RunCliOptions {
   cwd?: string
@@ -25,7 +27,7 @@ export interface RunCliOptions {
   stdout?: (message: string) => void
 }
 
-export type CliCommand = 'upload' | 'release' | 'preview' | 'open' | 'close' | 'auto' | 'ide-status' | 'ide-preview'
+export type CliCommand = 'upload' | 'release' | 'preview' | 'open' | 'close' | 'auto' | 'ide-status' | 'ide-preview' | 'version-latest' | 'version-list'
 
 export interface ParsedCliArgs {
   all?: boolean
@@ -103,6 +105,35 @@ export async function runCli(argv: string[] = process.argv.slice(2), options: Ru
     })
 
     logger.info(createCliConfigLoadedMessage(loaded.source, loaded.sourceFile))
+
+    if (command === 'version-latest' || command === 'version-list') {
+      const { getLatestVersion, getVersionList } = await import('./version')
+      const info = command === 'version-latest'
+        ? await getLatestVersion(platform, { config: loaded.config, cwd: loaded.cwd })
+        : await getVersionList(platform, { config: loaded.config, cwd: loaded.cwd })
+
+      if (args.json) {
+        const writeStdout = options.stdout ?? ((message: string) => process.stdout.write(message))
+        writeStdout(`${JSON.stringify({ schemaVersion: 1, ...info }, null, 2)}\n`)
+      }
+      else if (command === 'version-latest') {
+        logger.success(`${info.platform} 线上最新版本：${info.latest ?? '未知'}`)
+        if (info.grayReleaseVersion)
+          logger.info(`灰度版本：${info.grayReleaseVersion}`)
+      }
+      else {
+        for (const item of info.versions ?? []) {
+          logger.log([
+            item.version,
+            item.status ?? '-',
+            item.createTime ?? '-',
+            item.description ?? '',
+          ].join(' | '))
+        }
+      }
+
+      return 0
+    }
 
     if (batchRequested) {
       const platforms = args.all
@@ -210,6 +241,16 @@ export async function runCli(argv: string[] = process.argv.slice(2), options: Ru
       if (result.commentError)
         logger.error(`PR 评论失败：${result.commentError}`)
 
+      if (args.summary) {
+        const summaryPath = await writeBatchSummary(args.summary, renderReleaseComment(result), loaded.cwd)
+        logger.info(`summary 已写入：${summaryPath}`)
+      }
+
+      if (args.json) {
+        const writeStdout = options.stdout ?? ((message: string) => process.stdout.write(message))
+        writeStdout(`${JSON.stringify({ command: 'release', schemaVersion: 1, ...result }, null, 2)}\n`)
+      }
+
       logger.success(result.ok ? '发布完成' : '发布失败')
       return result.ok ? 0 : 1
     }
@@ -306,7 +347,11 @@ export async function runCli(argv: string[] = process.argv.slice(2), options: Ru
     }
 
     logger.start(createCliUploadStartMessage(platform))
-    const result = await uploadPlatform(platform, loaded.config, { cwd: loaded.cwd })
+    const resolution = await resolveVersion(loaded.config, {
+      cwd: loaded.cwd,
+      packageJson: loaded.packageJson,
+    })
+    const result = await uploadPlatform(platform, applyVersion(loaded.config, resolution), { cwd: loaded.cwd })
     logger.success(result.message)
     return 0
   }
@@ -337,6 +382,16 @@ export function parseCliArgs(argv: string[]): ParsedCliArgs {
         parsed.command = 'ide-preview'
       else
         throw new ConfigError(`未知 ide 子命令：${subcommand ?? '（空）'}`)
+      index = 2
+    }
+    else if (first === 'version') {
+      const subcommand = argv[1]
+      if (subcommand === 'latest')
+        parsed.command = 'version-latest'
+      else if (subcommand === 'list')
+        parsed.command = 'version-list'
+      else
+        throw new ConfigError(`未知 version 子命令：${subcommand ?? '（空）'}`)
       index = 2
     }
     else if (CLI_COMMANDS.has(first as CliCommand)) {

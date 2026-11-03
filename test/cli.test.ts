@@ -5,6 +5,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
 const mocks = vi.hoisted(() => ({
   WeixinProject: vi.fn(),
+  getLatestVersion: vi.fn(),
   weixinPreview: vi.fn(),
   weixinUpload: vi.fn(),
   alipayGetUploadedVersion: vi.fn(),
@@ -16,10 +17,12 @@ const mocks = vi.hoisted(() => ({
 
 vi.mock('miniprogram-ci', () => ({
   Project: mocks.WeixinProject,
+  getLatestVersion: mocks.getLatestVersion,
   preview: mocks.weixinPreview,
   upload: mocks.weixinUpload,
   default: {
     Project: mocks.WeixinProject,
+    getLatestVersion: mocks.getLatestVersion,
     preview: mocks.weixinPreview,
     upload: mocks.weixinUpload,
   },
@@ -52,6 +55,7 @@ const tempDirs: string[] = []
 
 beforeEach(() => {
   vi.clearAllMocks()
+  mocks.getLatestVersion.mockResolvedValue({ latestVersion: '1.0.0' })
   mocks.WeixinProject.mockImplementation(function (this: Record<string, unknown>, options: Record<string, unknown>) {
     this.options = options
   })
@@ -422,5 +426,27 @@ describe('批量参数', () => {
     expect(help).toContain('--json')
     expect(help).toContain('--summary')
     expect(help).toContain('--concurrency')
+  })
+})
+
+describe('version 参数', () => {
+  it('解析 version latest / list', () => {
+    expect(parseCliArgs(['version', 'latest', '-p', 'weixin'])).toEqual({
+      command: 'version-latest',
+      platform: 'weixin',
+    })
+    expect(parseCliArgs(['version', 'list', '-p', 'alipay', '--json'])).toEqual({
+      command: 'version-list',
+      json: true,
+      platform: 'alipay',
+    })
+  })
+
+  it('未知 version 子命令抛出错误', () => {
+    expect(() => parseCliArgs(['version'])).toThrow('未知 version 子命令')
+  })
+
+  it('帮助信息包含 version 命令', () => {
+    expect(createCliHelpText()).toContain('wotci version latest')
   })
 })

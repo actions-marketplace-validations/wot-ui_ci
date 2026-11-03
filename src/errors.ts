@@ -44,6 +44,20 @@ export class ReleaseError extends WotCIError {
   }
 }
 
+export class VersionError extends WotCIError {
+  constructor(message: string, cause?: unknown) {
+    super(message, 'VERSION_ERROR', cause)
+    this.name = 'VersionError'
+  }
+}
+
+export class VersionUnsupportedError extends WotCIError {
+  constructor(message: string, cause?: unknown) {
+    super(message, 'VERSION_UNSUPPORTED', cause)
+    this.name = 'VersionUnsupportedError'
+  }
+}
+
 export class BuildError extends WotCIError {
   constructor(message: string, cause?: unknown) {
     super(message, 'BUILD_ERROR', cause)
