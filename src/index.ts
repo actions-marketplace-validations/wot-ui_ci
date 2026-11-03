@@ -33,7 +33,7 @@ import { release } from './release'
 import { upload, uploadPlatform } from './upload'
 import { normalizePlatform } from './utils/platform'
 import { compareVersion } from './utils/version'
-import { getLatestVersion, getVersionList } from './version'
+import { cancelExperience, deleteVersion, getLatestVersion, getVersionList, setExperience } from './version'
 import { applyVersion, bumpVersion, resolveVersion } from './version-strategy'
 
 export {
@@ -77,6 +77,8 @@ export {
 export {
   applyVersion,
   bumpVersion,
+  cancelExperience,
+  deleteVersion,
   getLatestVersion,
   getVersionList,
   normalizePlatform,
@@ -154,6 +156,8 @@ export type {
   UserConfig,
   VersionBump,
   VersionInfo,
+  VersionMutationRequest,
+  VersionMutationResult,
   VersionRecord,
   VersionRequest,
   VersionResolution,
@@ -186,7 +190,9 @@ const wotci = {
   autoWeixinIde,
   applyVersion,
   bumpVersion,
+  cancelExperience,
   closeIde,
+  deleteVersion,
   compareVersion,
   getLatestVersion,
   getVersionList,
@@ -209,6 +215,7 @@ const wotci = {
   renderBatchSummary,
   resolveVersion,
   runDoctor,
+  setExperience,
   uploadMany,
   runAlipayIde,
   runWeixinIde,

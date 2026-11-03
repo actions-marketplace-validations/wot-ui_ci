@@ -554,6 +554,21 @@ export interface InitResult {
   written: boolean
 }
 
+/** 版本/体验版操作请求 */
+export interface VersionMutationRequest extends VersionRequest {
+  version: string
+  /** 删除版本等破坏性操作必须显式确认 */
+  confirm?: boolean
+}
+
+export interface VersionMutationResult {
+  platform: 'alipay'
+  action: 'set-experience' | 'cancel-experience' | 'delete'
+  version: string
+  qrCodeUrl?: string
+  message: string
+}
+
 /** doctor 请求 */
 export interface DoctorRequest extends UploadOptions {
   config?: UserConfig

@@ -206,6 +206,16 @@ describe('renderReleaseComment', () => {
     })
 
     expect(renderReleaseComment(result)).toContain('3.00MB (+1.00MB)')
+    expect(renderReleaseComment(createResult({
+      platforms: [{
+        durationMs: 1,
+        message: 'ok',
+        ok: true,
+        platform: 'weixin',
+        sizes: { main: 1024 * 1024, total: 2 * 1024 * 1024 },
+        trend: { deltaTotal: -1024 * 1024 },
+      }],
+    }))).toContain('2.00MB (-1.00MB)')
   })
 
   it('没有 git 信息时不输出提交行', () => {

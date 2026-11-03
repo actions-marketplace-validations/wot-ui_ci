@@ -37,6 +37,21 @@ interface MinidevRuntime {
         createTime?: string
         operateName?: string
       }>>
+      setExperience: (options: {
+        appId: string
+        clientType: string
+        version: string
+      }) => Promise<{ qrCodeUrl?: string }>
+      cancelExperience: (options: {
+        appId: string
+        clientType: string
+        version: string
+      }) => Promise<void>
+      deleteVersion: (options: {
+        appId: string
+        clientType: string
+        version: string
+      }) => Promise<void>
     }
     upload: (options: {
       project: string
@@ -131,6 +146,92 @@ export async function uploadAlipay(
     if (error instanceof UploadError)
       throw error
     throw new UploadError('支付宝小程序上传失败', error)
+  }
+}
+
+async function resolveAlipayMutationRuntime(
+  config: WotciConfig,
+  options: UploadOptions,
+): Promise<{
+  alipay: NonNullable<WotciConfig['alipay']>
+  clientType: string
+  runtime: MinidevRuntime
+}> {
+  const alipay = config.alipay
+  if (!alipay)
+    throw new VersionError('缺少支付宝小程序配置（alipay）')
+
+  const cwd = options.cwd ?? process.cwd()
+  const privateKey = await resolvePrivateKey(alipay, cwd).catch((error: unknown) => {
+    throw new VersionError('支付宝版本操作失败', error)
+  })
+  const runtime = resolveMinidevRuntime()
+  runtime.useDefaults({
+    config: {
+      defaults: {
+        'alipay.authentication.privateKey': privateKey,
+        'alipay.authentication.toolId': alipay.toolId,
+      },
+    },
+  })
+
+  return { alipay, clientType: alipay.clientType ?? 'alipay', runtime }
+}
+
+export async function setAlipayExperience(
+  config: WotciConfig,
+  version: string,
+  options: UploadOptions = {},
+): Promise<{ qrCodeUrl?: string }> {
+  const { alipay, clientType, runtime } = await resolveAlipayMutationRuntime(config, options)
+
+  try {
+    return await runtime.minidev.app.setExperience({
+      appId: alipay.appid,
+      clientType,
+      version,
+    })
+  }
+  catch (error) {
+    throw new VersionError('设置支付宝体验版失败', error)
+  }
+}
+
+export async function cancelAlipayExperience(
+  config: WotciConfig,
+  version: string,
+  options: UploadOptions = {},
+): Promise<void> {
+  const { alipay, clientType, runtime } = await resolveAlipayMutationRuntime(config, options)
+
+  try {
+    await runtime.minidev.app.cancelExperience({
+      appId: alipay.appid,
+      clientType,
+      version,
+    })
+  }
+  catch (error) {
+    throw new VersionError('取消支付宝体验版失败', error)
+  }
+}
+
+export async function deleteAlipayVersion(
+  config: WotciConfig,
+  version: string,
+  options: UploadOptions = {},
+): Promise<void> {
+  const { alipay, clientType, runtime } = await resolveAlipayMutationRuntime(config, options)
+
+  try {
+    await runtime.minidev.app.deleteVersion({
+      appId: alipay.appid,
+      clientType,
+      version,
+    })
+  }
+  catch (error) {
+    throw new VersionError('删除支付宝版本失败', error)
   }
 }
 

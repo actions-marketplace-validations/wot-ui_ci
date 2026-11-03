@@ -1,4 +1,4 @@
-import { mkdtemp, rm, writeFile } from 'node:fs/promises'
+import { mkdtemp, readFile, rm, writeFile } from 'node:fs/promises'
 import os from 'node:os'
 import path from 'node:path'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
@@ -219,5 +219,23 @@ describe('runCli release', () => {
     await runCli(['release', '--dry-run'], { cwd, ...writers })
 
     expect(stdout.some(line => line.includes('dry-run：构建 未配置'))).toBe(true)
+  })
+})
+
+describe('release JSON 与 summary', () => {
+  it('同时输出 JSON 与 summary 文件', async () => {
+    const cwd = await createProject()
+    const { stdout, writers } = createWriters()
+
+    const exitCode = await runCli([
+      'release',
+      '--json',
+      '--summary',
+      'out/release.md',
+    ], { cwd, ...writers })
+
+    expect(exitCode).toBe(0)
+    expect(JSON.parse(stdout[0])).toMatchObject({ command: 'release', ok: true, schemaVersion: 1 })
+    expect(await readFile(path.join(cwd, 'out/release.md'), 'utf8')).toContain('小程序发布成功')
   })
 })

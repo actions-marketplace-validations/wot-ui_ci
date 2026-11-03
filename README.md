@@ -8,6 +8,7 @@
 - 微信上传链路基于 `miniprogram-ci` 2.x
 - 提供 CLI（`wotci`）与 JS API（`upload`、`uploadPlatform`、`uploadWeixin` 等）
 - 支持 `wotci init` 自动生成配置
+- 支持支付宝体验版设置/取消与版本删除
 - 支持包体积预算与发布体积趋势
 - 支持 `release` 一步完成构建、多平台上传、历史记录与 PR 评论
 - 支持微信、支付宝预览二维码（文件 / 终端 / URL）
@@ -139,6 +140,20 @@ export default defineConfig(({ env, packageJson }) => ({
   },
 }))
 ```
+
+## 体验版与版本管理（支付宝）
+
+```sh
+wotci experience set    -p alipay --version 1.2.3
+wotci experience cancel -p alipay --version 1.2.3
+wotci version delete    -p alipay --version 1.2.3 --yes
+```
+
+- `set` 会把指定版本设为体验版，并返回体验版二维码
+- `cancel` 取消体验版
+- `delete` 删除线上版本，属于破坏性操作，必须显式 `--yes`
+- 仅支付宝支持；微信、钉钉返回 `VersionUnsupportedError`
+- 所有操作都支持 `--json`
 
 ## 包体积预算
 
@@ -665,6 +680,26 @@ const resolution = await resolveVersion(loaded.config, {
 console.log(resolution.version, resolution.source)
 ```
 
+### 体验版与版本管理
+
+```ts
+import { cancelExperience, deleteVersion, setExperience } from '@wot-ui/ci'
+
+const experience = await setExperience('alipay', {
+  cwd: process.cwd(),
+  version: '1.2.3',
+})
+console.log(experience.qrCodeUrl)
+
+await cancelExperience('alipay', { cwd: process.cwd(), version: '1.2.3' })
+
+await deleteVersion('alipay', {
+  confirm: true,
+  cwd: process.cwd(),
+  version: '1.2.3',
+})
+```
+
 ### 批量上传 / 预览
 
 ```ts
@@ -805,6 +840,7 @@ await wotci.upload('weixin')
 - 上传错误抛出 `UploadError`，原始错误挂在 `cause` 上
 - 预览错误抛出 `PreviewError`；平台不支持预览时抛出 `PreviewUnsupportedError`
 - 发布编排错误抛出 `ReleaseError`，构建失败抛出 `BuildError`
+- 版本查询/管理错误抛出 `VersionError`；平台不支持时抛出 `VersionUnsupportedError`
 - IDE 相关错误抛出 `IdeError` 的子类：`IdeNotFoundError`（找不到 IDE）、`IdeUnsupportedError`（平台不支持）、`IdeCommandError`（命令执行失败）
 - 以上错误都继承 `WotCIError`（带 `code` 字段）
 - `formatErrorReport(error)` 可以把 `cause` 链格式化为字符串数组

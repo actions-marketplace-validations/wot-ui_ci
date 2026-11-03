@@ -4,13 +4,19 @@ import path from 'node:path'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
 const mocks = vi.hoisted(() => ({
+  cancelExperience: vi.fn(),
+  deleteVersion: vi.fn(),
   getLatestVersion: vi.fn(),
   getVersionList: vi.fn(),
+  setExperience: vi.fn(),
 }))
 
 vi.mock('../src/version', () => ({
+  cancelExperience: mocks.cancelExperience,
+  deleteVersion: mocks.deleteVersion,
   getLatestVersion: mocks.getLatestVersion,
   getVersionList: mocks.getVersionList,
+  setExperience: mocks.setExperience,
 }))
 
 vi.mock('../src/batch', () => ({
@@ -37,6 +43,25 @@ const tempDirs: string[] = []
 beforeEach(() => {
   vi.clearAllMocks()
   mocks.getLatestVersion.mockResolvedValue({ latest: '1.2.3', platform: 'weixin' })
+  mocks.setExperience.mockResolvedValue({
+    action: 'set-experience',
+    message: '已设置支付宝体验版：1.0.0',
+    platform: 'alipay',
+    qrCodeUrl: 'https://qr',
+    version: '1.0.0',
+  })
+  mocks.cancelExperience.mockResolvedValue({
+    action: 'cancel-experience',
+    message: '已取消支付宝体验版：1.0.0',
+    platform: 'alipay',
+    version: '1.0.0',
+  })
+  mocks.deleteVersion.mockResolvedValue({
+    action: 'delete',
+    message: '已删除支付宝版本：1.0.0',
+    platform: 'alipay',
+    version: '1.0.0',
+  })
   mocks.getVersionList.mockResolvedValue({
     platform: 'alipay',
     versions: [
@@ -118,5 +143,90 @@ describe('runCli version', () => {
 
     expect(await runCli(['version', 'unknown', '-p', 'weixin'], { cwd, ...writers })).toBe(1)
     expect(stderr.some(line => line.includes('未知 version 子命令'))).toBe(true)
+  })
+})
+
+describe('runCli experience / version delete', () => {
+  it('experience set 输出二维码', async () => {
+    const cwd = await createProject()
+    const { stdout, writers } = createWriters()
+
+    const exitCode = await runCli([
+      'experience',
+      'set',
+      '-p',
+      'alipay',
+      '--version',
+      '1.0.0',
+    ], { cwd, ...writers })
+
+    expect(exitCode).toBe(0)
+    expect(mocks.setExperience).toHaveBeenCalledWith('alipay', expect.objectContaining({ version: '1.0.0' }))
+    expect(stdout.some(line => line.includes('已设置支付宝体验版'))).toBe(true)
+    expect(stdout.some(line => line.includes('体验版二维码：https://qr'))).toBe(true)
+  })
+
+  it('experience cancel', async () => {
+    const cwd = await createProject()
+    const { stdout, writers } = createWriters()
+
+    const exitCode = await runCli(['experience', 'cancel', '-p', 'alipay', '--version', '1.0.0'], { cwd, ...writers })
+
+    expect(exitCode).toBe(0)
+    expect(mocks.cancelExperience).toHaveBeenCalled()
+    expect(stdout.some(line => line.includes('已取消支付宝体验版'))).toBe(true)
+  })
+
+  it('version delete 传递 --yes', async () => {
+    const cwd = await createProject()
+    const { stdout, writers } = createWriters()
+
+    const exitCode = await runCli([
+      'version',
+      'delete',
+      '-p',
+      'alipay',
+      '--version',
+      '1.0.0',
+      '--yes',
+    ], { cwd, ...writers })
+
+    expect(exitCode).toBe(0)
+    expect(mocks.deleteVersion).toHaveBeenCalledWith('alipay', expect.objectContaining({ confirm: true, version: '1.0.0' }))
+    expect(stdout.some(line => line.includes('已删除支付宝版本'))).toBe(true)
+  })
+
+  it('缺少 --version 时返回 1', async () => {
+    const cwd = await createProject()
+    const { stderr, writers } = createWriters()
+
+    const exitCode = await runCli(['experience', 'set', '-p', 'alipay'], { cwd, ...writers })
+
+    expect(exitCode).toBe(1)
+    expect(stderr).toContain('[失败] 缺少必填参数：--version')
+  })
+})
+
+describe('runCli experience --json', () => {
+  it('输出结构化结果与二维码', async () => {
+    const cwd = await createProject()
+    const { stdout, writers } = createWriters()
+
+    await runCli([
+      'experience',
+      'set',
+      '-p',
+      'alipay',
+      '--version',
+      '1.0.0',
+      '--json',
+    ], { cwd, ...writers })
+
+    expect(JSON.parse(stdout[0])).toMatchObject({
+      command: 'experience-set',
+      qrCodeUrl: 'https://qr',
+      schemaVersion: 1,
+      version: '1.0.0',
+    })
   })
 })

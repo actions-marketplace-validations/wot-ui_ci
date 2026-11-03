@@ -30,10 +30,11 @@ export interface RunCliOptions {
   stdout?: (message: string) => void
 }
 
-export type CliCommand = 'upload' | 'release' | 'preview' | 'open' | 'close' | 'auto' | 'ide-status' | 'ide-preview' | 'version-latest' | 'version-list' | 'doctor' | 'init'
+export type CliCommand = 'upload' | 'release' | 'preview' | 'open' | 'close' | 'auto' | 'ide-status' | 'ide-preview' | 'version-latest' | 'version-list' | 'version-delete' | 'experience-set' | 'experience-cancel' | 'doctor' | 'init'
 
 export interface ParsedCliArgs {
   all?: boolean
+  appVersion?: string
   build?: string
   command?: CliCommand
   concurrency?: number
@@ -64,6 +65,7 @@ export interface ParsedCliArgs {
   summary?: string
   ticket?: string
   trustProject?: boolean
+  yes?: boolean
 }
 
 const CLI_COMMANDS = new Set<CliCommand>(['upload', 'release', 'preview', 'open', 'close', 'auto', 'doctor', 'init'])
@@ -165,6 +167,41 @@ export async function runCli(argv: string[] = process.argv.slice(2), options: Ru
     })
 
     logger.info(createCliConfigLoadedMessage(loaded.source, loaded.sourceFile))
+
+    if (command === 'experience-set' || command === 'experience-cancel' || command === 'version-delete') {
+      if (!args.appVersion) {
+        logger.error('缺少必填参数：--version')
+        return 1
+      }
+
+      const { cancelExperience, deleteVersion, setExperience } = await import('./version')
+      const request = {
+        appVersion: args.appVersion,
+        command,
+      }
+      const result = command === 'experience-set'
+        ? await setExperience(platform, { config: loaded.config, cwd: loaded.cwd, version: request.appVersion })
+        : command === 'experience-cancel'
+          ? await cancelExperience(platform, { config: loaded.config, cwd: loaded.cwd, version: request.appVersion })
+          : await deleteVersion(platform, {
+              config: loaded.config,
+              confirm: args.yes,
+              cwd: loaded.cwd,
+              version: request.appVersion,
+            })
+
+      if (args.json) {
+        const writeStdout = options.stdout ?? ((message: string) => process.stdout.write(message))
+        writeStdout(`${JSON.stringify({ command, schemaVersion: 1, ...result }, null, 2)}\n`)
+      }
+      else {
+        logger.success(result.message)
+        if (result.qrCodeUrl)
+          logger.info(`体验版二维码：${result.qrCodeUrl}`)
+      }
+
+      return 0
+    }
 
     if (command === 'version-latest' || command === 'version-list') {
       const { getLatestVersion, getVersionList } = await import('./version')
@@ -455,8 +492,20 @@ export function parseCliArgs(argv: string[]): ParsedCliArgs {
         parsed.command = 'version-latest'
       else if (subcommand === 'list')
         parsed.command = 'version-list'
+      else if (subcommand === 'delete')
+        parsed.command = 'version-delete'
       else
         throw new ConfigError(`未知 version 子命令：${subcommand ?? '（空）'}`)
+      index = 2
+    }
+    else if (first === 'experience') {
+      const subcommand = argv[1]
+      if (subcommand === 'set')
+        parsed.command = 'experience-set'
+      else if (subcommand === 'cancel')
+        parsed.command = 'experience-cancel'
+      else
+        throw new ConfigError(`未知 experience 子命令：${subcommand ?? '（空）'}`)
       index = 2
     }
     else if (CLI_COMMANDS.has(first as CliCommand)) {
@@ -567,6 +616,12 @@ export function parseCliArgs(argv: string[]): ParsedCliArgs {
         break
       case '--network':
         parsed.network = true
+        break
+      case '--version':
+        parsed.appVersion = readOptionValue(argv, ++index, current)
+        break
+      case '--yes':
+        parsed.yes = true
         break
       default:
         throw new ConfigError(`未知参数：${current}`)

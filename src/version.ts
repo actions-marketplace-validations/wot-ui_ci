@@ -1,7 +1,13 @@
-import type { PlatformInput, VersionInfo, VersionRequest } from './types'
+import type { LoadedConfig, PlatformInput, VersionInfo, VersionMutationRequest, VersionMutationResult, VersionRequest } from './types'
 import { loadConfig } from './config'
-import { VersionUnsupportedError } from './errors'
-import { getAlipayLatestVersion, getAlipayVersionList } from './platforms/alipay'
+import { VersionError, VersionUnsupportedError } from './errors'
+import {
+  cancelAlipayExperience,
+  deleteAlipayVersion,
+  getAlipayLatestVersion,
+  getAlipayVersionList,
+  setAlipayExperience,
+} from './platforms/alipay'
 import { getWeixinLatestVersion } from './platforms/weixin'
 import { normalizePlatform } from './utils/platform'
 
@@ -46,4 +52,71 @@ export async function getVersionList(
   const versions = await getAlipayVersionList(loaded.config, { cwd: loaded.cwd })
 
   return { platform: 'alipay', versions }
+}
+
+export async function setExperience(
+  platform: PlatformInput,
+  request: VersionMutationRequest,
+): Promise<VersionMutationResult> {
+  const loaded = await ensureAlipayMutation(platform, request)
+  const { qrCodeUrl } = await setAlipayExperience(loaded.config, request.version, { cwd: loaded.cwd })
+
+  return {
+    action: 'set-experience',
+    message: `已设置支付宝体验版：${request.version}`,
+    platform: 'alipay',
+    ...(qrCodeUrl ? { qrCodeUrl } : {}),
+    version: request.version,
+  }
+}
+
+export async function cancelExperience(
+  platform: PlatformInput,
+  request: VersionMutationRequest,
+): Promise<VersionMutationResult> {
+  const loaded = await ensureAlipayMutation(platform, request)
+  await cancelAlipayExperience(loaded.config, request.version, { cwd: loaded.cwd })
+
+  return {
+    action: 'cancel-experience',
+    message: `已取消支付宝体验版：${request.version}`,
+    platform: 'alipay',
+    version: request.version,
+  }
+}
+
+export async function deleteVersion(
+  platform: PlatformInput,
+  request: VersionMutationRequest,
+): Promise<VersionMutationResult> {
+  if (!request.confirm)
+    throw new VersionError('删除版本是破坏性操作，请传 confirm: true 或使用 --yes')
+
+  const loaded = await ensureAlipayMutation(platform, request)
+  await deleteAlipayVersion(loaded.config, request.version, { cwd: loaded.cwd })
+
+  return {
+    action: 'delete',
+    message: `已删除支付宝版本：${request.version}`,
+    platform: 'alipay',
+    version: request.version,
+  }
+}
+
+async function ensureAlipayMutation(
+  platform: PlatformInput,
+  request: VersionMutationRequest,
+): Promise<LoadedConfig> {
+  const normalized = normalizePlatform(platform)
+  if (normalized !== 'alipay')
+    throw new VersionUnsupportedError('当前仅支持支付宝体验版与版本管理')
+
+  if (!request.version?.trim())
+    throw new VersionError('必须提供 version')
+
+  return loadConfig({
+    config: request.config,
+    configFile: request.configFile,
+    cwd: request.cwd,
+  })
 }

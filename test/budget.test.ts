@@ -76,3 +76,15 @@ describe('budget 补充', () => {
     })
   })
 })
+
+describe('budget 主包与 MB 格式', () => {
+  it('格式化主包超限和 MB 单位', () => {
+    const text = formatBudgetReport({
+      ok: false,
+      violations: [{ actual: 2 * 1024 * 1024, limit: 1024 * 1024, metric: 'main' }],
+      warnOnly: false,
+    })
+
+    expect(text).toBe('主包 2.00MB 超出预算 1.00MB')
+  })
+})

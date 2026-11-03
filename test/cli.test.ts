@@ -489,3 +489,25 @@ describe('init 参数', () => {
     expect(createCliHelpText()).toContain('wotci init')
   })
 })
+
+describe('experience / version delete 参数', () => {
+  it('解析 experience set/cancel 与 version delete', () => {
+    expect(parseCliArgs(['experience', 'set', '-p', 'alipay', '--version', '1.0.0'])).toEqual({
+      appVersion: '1.0.0',
+      command: 'experience-set',
+      platform: 'alipay',
+    })
+    expect(parseCliArgs(['version', 'delete', '-p', 'alipay', '--version', '1.0.0', '--yes'])).toEqual({
+      appVersion: '1.0.0',
+      command: 'version-delete',
+      platform: 'alipay',
+      yes: true,
+    })
+  })
+
+  it('帮助信息包含 experience 与 version delete', () => {
+    const help = createCliHelpText()
+    expect(help).toContain('wotci experience set')
+    expect(help).toContain('wotci version delete')
+  })
+})
