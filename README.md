@@ -67,7 +67,7 @@ wotci.config.ts + 构建产物
 - **配置灵活**：支持 `wotci.config.ts/js/mjs/cjs/mts/cts`，可用工厂函数读取 `process.env`；兼容 `.minicirc`、`package.json` 字段与 `dd` 别名
 - **上传前可控**：`doctor` 体检、`--dry-run` 本地校验、`--build-npm`、包体积预算
 - **预览**：微信 / 支付宝预览二维码，支持文件、终端、URL、base64
-- **版本管理**：线上版本查询，`fixed` / `package` / `auto` 版本策略，支付宝体验版与版本删除
+- **版本管理**：线上版本查询（微信仅插件类型项目支持），`fixed` / `package` / `auto` 版本策略，支付宝体验版与版本删除
 - **发布编排**：`release` 串联构建、多平台上传、历史记录与 PR 评论
 - **微信诊断**：构建 npm、SourceMap、编译产物导出、代码质量检查
 - **IDE 联动**：打开 / 关闭微信、支付宝开发者工具，支持自动化端口与 IDE 预览
@@ -163,6 +163,8 @@ pnpm exec wotci doctor
 ```sh
 pnpm exec wotci doctor --network
 ```
+
+注意：`miniprogram-ci` 的 `getLatestVersion` 只支持插件类型项目（`miniProgramPlugin` / `miniGamePlugin`）。普通小程序会跳过微信网络校验并给出 `warn`，不会阻塞上传。
 
 ## CLI 命令速查
 
@@ -548,7 +550,7 @@ export default defineConfig({
 - `fixed`：使用配置版本
 - `package`：读取 `package.json` 的 version
 - `auto`：查询线上最新版本后本地递增，不会修改 `package.json`
-- 微信取 `getLatestVersion`，支付宝取 `getUploadedVersion`
+- 微信取 `getLatestVersion`，但仅 `miniProgramPlugin` / `miniGamePlugin` 项目支持；普通小程序请用 `fixed` / `package` 策略，支付宝取 `getUploadedVersion`
 - 钉钉没有版本查询能力，会回退到 `package.json` / 配置版本
 - `--dry-run` 时 `auto` 不发起网络请求，使用 `package.json` 版本递增
 
@@ -569,6 +571,8 @@ wotci version latest -p alipay
 wotci version list -p alipay
 wotci version latest -p weixin --json
 ```
+
+微信的 `version latest` 仅支持插件类型项目；普通小程序会返回 `VersionUnsupportedError`，请以 `package.json` 或配置里的版本为准。支付宝支持 `latest` 和 `list`。
 
 ### 体验版与版本删除
 
@@ -697,7 +701,7 @@ wotci doctor --json
 - 私钥存在性、权限、PEM 格式
 - 微信 / 支付宝开发者工具路径
 - release 构建命令与 GitHub PR 评论环境
-- `--network` 时调用线上版本接口，校验 appid、私钥和 IP 白名单
+- `--network` 时调用线上版本接口，校验 appid、私钥和 IP 白名单；微信普通小程序不支持该查询，会自动跳过
 
 退出码：有 `error` 时为 `1`，只有 `warn` 时为 `0`。`--json` 输出结构化检查结果，适合 CI。
 

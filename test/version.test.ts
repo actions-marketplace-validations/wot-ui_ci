@@ -87,20 +87,29 @@ describe('微信最新版本', () => {
   it('返回 latest 与灰度版本', async () => {
     const cwd = await createFixture()
 
-    await expect(getWeixinLatestVersion(weixinConfig(), { cwd })).resolves.toEqual({
+    await expect(getWeixinLatestVersion(weixinConfig({ type: 'miniProgramPlugin' }), { cwd })).resolves.toEqual({
       grayReleaseVersion: '1.2.2',
       latest: '1.2.3',
     })
+  })
+
+  it('普通小程序不支持线上版本查询', async () => {
+    const cwd = await createFixture()
+
+    await expect(getWeixinLatestVersion(weixinConfig(), { cwd }))
+      .rejects
+      .toThrow(VersionUnsupportedError)
+    expect(mocks.getLatestVersion).not.toHaveBeenCalled()
   })
 
   it('缺少配置/私钥/目录时抛出 VersionError', async () => {
     const cwd = await createFixture()
 
     await expect(getWeixinLatestVersion({}, { cwd })).rejects.toThrow(VersionError)
-    await expect(getWeixinLatestVersion(weixinConfig({ privateKeyPath: 'keys/missing.key' }), { cwd }))
+    await expect(getWeixinLatestVersion(weixinConfig({ type: 'miniProgramPlugin', privateKeyPath: 'keys/missing.key' }), { cwd }))
       .rejects
       .toThrow(VersionError)
-    await expect(getWeixinLatestVersion(weixinConfig({ projectPath: 'dist/missing' }), { cwd }))
+    await expect(getWeixinLatestVersion(weixinConfig({ type: 'miniProgramPlugin', projectPath: 'dist/missing' }), { cwd }))
       .rejects
       .toThrow(VersionError)
   })
@@ -109,7 +118,7 @@ describe('微信最新版本', () => {
     const cwd = await createFixture()
     mocks.getLatestVersion.mockRejectedValueOnce(new Error('network'))
 
-    await expect(getWeixinLatestVersion(weixinConfig(), { cwd }))
+    await expect(getWeixinLatestVersion(weixinConfig({ type: 'miniProgramPlugin' }), { cwd }))
       .rejects
       .toThrow('获取微信线上版本失败')
   })
@@ -155,7 +164,7 @@ describe('version 路由', () => {
   it('按平台查询最新版本', async () => {
     const cwd = await createFixture()
 
-    await expect(getLatestVersion('weixin', { config: weixinConfig(), cwd }))
+    await expect(getLatestVersion('weixin', { config: weixinConfig({ type: 'miniProgramPlugin' }), cwd }))
       .resolves
       .toMatchObject({ latest: '1.2.3', platform: 'weixin' })
     await expect(getLatestVersion('alipay', { config: alipayConfig(), cwd }))

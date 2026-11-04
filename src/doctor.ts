@@ -10,6 +10,7 @@ import { readFile, stat } from 'node:fs/promises'
 import process from 'node:process'
 import { parseBudgetSize } from './budget'
 import { CONFIG_FILE_NAMES, LEGACY_CONFIG_FILE_NAME, loadConfig } from './config'
+import { formatErrorReport } from './errors'
 import { getWeixinCliCandidates } from './ide/weixin'
 import { exists, isDirectory, resolveFromCwd } from './utils/path'
 
@@ -99,6 +100,19 @@ export async function runDoctor(request: DoctorRequest = {}): Promise<DoctorResu
         continue
       }
 
+      if (platform === 'weixin') {
+        const type = config.weixin?.type ?? 'miniProgram'
+        if (type !== 'miniProgramPlugin' && type !== 'miniGamePlugin') {
+          add(
+            'warn',
+            'network-weixin',
+            'weixin 网络校验',
+            `普通 ${type} 项目不支持线上版本查询（miniprogram-ci 仅支持插件类型），已跳过`,
+          )
+          continue
+        }
+      }
+
       const { getLatestVersion } = await import('./version')
 
       try {
@@ -111,7 +125,7 @@ export async function runDoctor(request: DoctorRequest = {}): Promise<DoctorResu
           `network-${platform}`,
           `${platform} 网络校验`,
           '版本查询失败，请检查 appid、私钥与 IP 白名单',
-          [error instanceof Error ? error.message : String(error)],
+          formatErrorReport(error),
         )
       }
     }

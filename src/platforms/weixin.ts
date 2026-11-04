@@ -15,7 +15,7 @@ import path from 'node:path'
 import process from 'node:process'
 import * as weixinCIModule from 'miniprogram-ci'
 import { evaluateBudgets } from '../budget'
-import { PreviewError, UploadError, VersionError } from '../errors'
+import { PreviewError, UploadError, VersionError, VersionUnsupportedError } from '../errors'
 import { appendDesc } from '../messages'
 import { isDirectory, resolveFromCwd } from '../utils/path'
 
@@ -52,6 +52,13 @@ export async function getWeixinLatestVersion(
   const weixin = config.weixin
   if (!weixin)
     throw new VersionError('缺少微信小程序配置（weixin）')
+
+  const projectType = weixin.type ?? 'miniProgram'
+  if (projectType !== 'miniProgramPlugin' && projectType !== 'miniGamePlugin') {
+    throw new VersionUnsupportedError(
+      `微信 ${projectType} 项目不支持线上版本查询；miniprogram-ci 的 getLatestVersion 仅支持 miniProgramPlugin / miniGamePlugin 项目`,
+    )
+  }
 
   const cwd = options.cwd ?? process.cwd()
   const projectPath = resolveFromCwd(cwd, weixin.projectPath)

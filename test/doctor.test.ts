@@ -191,18 +191,27 @@ describe('runDoctor', () => {
     expect(result.checks).toContainEqual(expect.objectContaining({ id: 'dingtalk-token', status: 'error' }))
   })
 
-  it('网络校验成功、失败与钉钉跳过', async () => {
+  it('网络校验成功、失败与普通小程序跳过', async () => {
     const cwd = await createFixture()
-    const config = createConfig(cwd)
+    const baseConfig = createConfig(cwd)
+    const pluginConfig = {
+      ...baseConfig,
+      weixin: { ...baseConfig.weixin, type: 'miniProgramPlugin' as const },
+    }
 
-    const ok = await runDoctor({ config, cwd, network: true })
+    const ok = await runDoctor({ config: pluginConfig, cwd, network: true })
     expect(ok.checks).toContainEqual(expect.objectContaining({ id: 'network-weixin', status: 'ok' }))
     expect(ok.checks).toContainEqual(expect.objectContaining({ id: 'network-dingtalk', status: 'warn' }))
 
     mocks.getLatestVersion.mockRejectedValue(new Error('network'))
-    const failed = await runDoctor({ config, cwd, network: true })
+    const failed = await runDoctor({ config: pluginConfig, cwd, network: true })
     expect(failed.ok).toBe(false)
     expect(failed.checks).toContainEqual(expect.objectContaining({ id: 'network-weixin', status: 'error' }))
+
+    mocks.getLatestVersion.mockClear()
+    const skipped = await runDoctor({ config: baseConfig, cwd, network: true })
+    expect(skipped.checks).toContainEqual(expect.objectContaining({ id: 'network-weixin', status: 'warn' }))
+    expect(mocks.getLatestVersion).not.toHaveBeenCalledWith('weixin', expect.anything())
   })
 
   it('release 构建与 GitHub 环境检查', async () => {
