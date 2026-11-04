@@ -60,9 +60,12 @@ inputs:
     required: false
     default: ''
   package-version:
-    description: '@wot-ui/ci version used via npx when the project does not have it installed'
+    description: >-
+      @wot-ui/ci version used via npx when the project does not have it installed.
+      Empty means: use the version of the action ref (uses wot-ui/ci@v0.4.1 -> 0.4.1),
+      falling back to latest for moving refs such as v0 or main
     required: false
-    default: latest
+    default: ''
   install-dependencies:
     description: Run package manager install before wotci
     required: false

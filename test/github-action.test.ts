@@ -107,4 +107,50 @@ describe.skipIf(process.platform === 'win32')('github-action.sh', () => {
     const args = (await readFile(outputFile, 'utf8')).trim().split('\n')
     expect(args).toEqual(['--yes', '@wot-ui/ci@1.2.3', 'doctor'])
   })
+
+  it('没有显式版本时跟随精确的 action ref', async () => {
+    const cwd = await createProject()
+    const binDir = path.join(cwd, 'bin')
+    await mkdir(binDir, { recursive: true })
+    await writeFakeCli(path.join(binDir, 'npx'))
+    const outputFile = path.join(cwd, 'ref-args.txt')
+
+    execFileSync('bash', [scriptPath], {
+      env: {
+        ...process.env,
+        GITHUB_ACTION_REF: 'v0.4.1',
+        INPUT_COMMAND: 'doctor',
+        INPUT_PACKAGE_VERSION: '',
+        INPUT_WORKING_DIRECTORY: cwd,
+        OUTPUT_FILE: outputFile,
+        PATH: `${binDir}:${process.env.PATH}`,
+      },
+    })
+
+    const args = (await readFile(outputFile, 'utf8')).trim().split('\n')
+    expect(args).toEqual(['--yes', '@wot-ui/ci@0.4.1', 'doctor'])
+  })
+
+  it('浮动 action ref 回落到 latest', async () => {
+    const cwd = await createProject()
+    const binDir = path.join(cwd, 'bin')
+    await mkdir(binDir, { recursive: true })
+    await writeFakeCli(path.join(binDir, 'npx'))
+    const outputFile = path.join(cwd, 'floating-args.txt')
+
+    execFileSync('bash', [scriptPath], {
+      env: {
+        ...process.env,
+        GITHUB_ACTION_REF: 'v0',
+        INPUT_COMMAND: 'doctor',
+        INPUT_PACKAGE_VERSION: '',
+        INPUT_WORKING_DIRECTORY: cwd,
+        OUTPUT_FILE: outputFile,
+        PATH: `${binDir}:${process.env.PATH}`,
+      },
+    })
+
+    const args = (await readFile(outputFile, 'utf8')).trim().split('\n')
+    expect(args).toEqual(['--yes', '@wot-ui/ci@latest', 'doctor'])
+  })
 })

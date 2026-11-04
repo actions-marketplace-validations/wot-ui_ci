@@ -74,10 +74,31 @@ if [ -n "${INPUT_ARGS:-}" ]; then
   args+=("${extra_args[@]}")
 fi
 
+# 解析 npx 回退时使用的 @wot-ui/ci 版本：
+#   1. 显式 INPUT_PACKAGE_VERSION 优先
+#   2. 否则用 action ref 的精确版本（uses: wot-ui/ci@v0.4.1 -> 0.4.1），保证 action 与 CLI 同版本
+#   3. 浮动 ref（v0 / main / 分支）映射不到 npm 版本，回落到 latest
+resolve_package_version() {
+  local version="${INPUT_PACKAGE_VERSION:-}"
+  if [ -n "$version" ]; then
+    printf '%s' "$version"
+    return
+  fi
+
+  local ref="${GITHUB_ACTION_REF:-}"
+  ref="${ref#v}"
+  if [[ "$ref" =~ ^[0-9]+\.[0-9]+\.[0-9]+(-[0-9A-Za-z.]+)?$ ]]; then
+    printf '%s' "$ref"
+    return
+  fi
+
+  printf '%s' "latest"
+}
+
 if [ -x "./node_modules/.bin/wotci" ]; then
   cli=("./node_modules/.bin/wotci")
 else
-  cli=("npx" "--yes" "@wot-ui/ci@${INPUT_PACKAGE_VERSION:-latest}")
+  cli=("npx" "--yes" "@wot-ui/ci@$(resolve_package_version)")
 fi
 
 echo "[wotci-action] ${cli[*]} ${args[*]}"
