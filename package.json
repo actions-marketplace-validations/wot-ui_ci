@@ -1,7 +1,7 @@
 {
   "name": "@wot-ui/ci",
   "type": "module",
-  "version": "0.3.0",
+  "version": "0.4.0",
   "packageManager": "pnpm@10.25.0",
   "description": "小程序多平台 CI 上传工具，支持 JS API、JS/TS 配置文件与环境变量注入",
   "author": "weisheng",
