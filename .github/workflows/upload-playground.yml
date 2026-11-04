@@ -236,11 +236,18 @@ jobs:
         run: node dist/bin.mjs doctor --cwd playground --config wotci.config.ts
 
       - name: Doctor network check
-        # 微信上传要求调用方 IP 在白名单内，提前用 --network 暴露这类问题；失败不阻塞后续步骤
+        # 仅作为诊断：微信上传要求 IP 在白名单内，但网络校验失败不应阻塞真实上传
         if: ${{ steps.inputs.outputs.dry_run != 'true' }}
-        continue-on-error: true
         timeout-minutes: 5
-        run: node dist/bin.mjs doctor --cwd playground --config wotci.config.ts --network
+        run: |
+          set +e
+          output=$(node dist/bin.mjs doctor --cwd playground --config wotci.config.ts --network 2>&1)
+          status=$?
+          set -e
+          printf '%s\n' "$output"
+          if [ "$status" -ne 0 ]; then
+            echo "::warning title=Network check failed::doctor --network 未通过（常见原因：插件项目的 IP 白名单或密钥权限），继续执行上传。"
+          fi
 
       - name: Upload plan (dry-run)
         id: plan
