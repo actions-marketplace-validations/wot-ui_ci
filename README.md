@@ -869,7 +869,7 @@ jobs:
       - run: pnpm install --frozen-lockfile
       - run: pnpm build
 
-      - uses: wot-ui/ci@v0.3.0
+      - uses: wot-ui/ci@v0
         with:
           command: preview
           platform: weixin
@@ -883,7 +883,7 @@ jobs:
 发布：
 
 ```yaml
-- uses: wot-ui/ci@v0.3.0
+- uses: wot-ui/ci@v0
   with:
     command: release
     platform: weixin,alipay
@@ -906,14 +906,16 @@ jobs:
 | `history` | `auto` / `true` / `false` |
 | `args` | 额外 CLI 参数 |
 | `install-dependencies` | 是否在 action 内执行安装 |
-| `package-version` | 本地未安装时通过 npx 使用的 `@wot-ui/ci` 版本 |
+| `package-version` | 本地未安装时通过 npx 使用的 `@wot-ui/ci` 版本；默认跟随 action 的 tag（`@v0.4.1` → `0.4.1`），浮动 tag 才回落到 `latest` |
 
 说明：
 
-- action 优先使用项目内的 `node_modules/.bin/wotci`，否则回退到 `npx @wot-ui/ci@<package-version>`
+- action 优先使用项目内的 `node_modules/.bin/wotci`，否则回退到 `npx @wot-ui/ci@<version>`；`<version>` 默认取自 action 的 tag（`uses: wot-ui/ci@v0.4.1` → `0.4.1`），只有浮动 tag（`@v0`、`@main`）才用 `latest`
 - 推荐把 `@wot-ui/ci` 加进 devDependencies，这样配置文件里的 `import { defineConfig } from '@wot-ui/ci'` 才能正常解析
 - 私钥需要在 workflow 中提前落盘；建议写入 `$RUNNER_TEMP` 并执行 `chmod 600`，[upload-playground.yml](.github/workflows/upload-playground.yml) 有完整示例
 - `release` 的 PR 评论需要 `pull-requests: write` 和 `issues: write`
+
+维护者发布流程（含 Marketplace 上架的人工那一步）见 [docs/releasing.md](docs/releasing.md)。
 
 ### 能力自检
 
@@ -1255,6 +1257,8 @@ pnpm verify:capabilities
 `pnpm verify:capabilities` 会构建、打包，并在临时项目里安装后逐项验证 CLI / JS API 能力，见 [能力自检](#能力自检)。
 
 测试覆盖率由 vitest 统计，并对 statements / branches / functions / lines 设置 95% 阈值；`src/bin.ts` 是进程入口，依赖 `process.exit`，不纳入覆盖率统计。
+
+开发约定、提交信息规范与 PR 流程见 [CONTRIBUTING.md](CONTRIBUTING.md)。
 
 ## 路线图
 
