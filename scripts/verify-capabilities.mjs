@@ -992,6 +992,20 @@ const cases = [
   },
   {
     group: 'IDE 联动',
+    name: 'CI 环境下拒绝启动开发者工具',
+    fixture: 'healthy',
+    env: { CI: 'true' },
+    args: ['open', '-p', 'weixin'],
+    async verify(result, ctx) {
+      expectExit(result, 1)
+      assertIncludes(result.stderr, '检测到 CI 环境', 'stderr')
+      assertIncludes(result.stderr, '--force', 'stderr')
+      const calls = await ctx.ideCalls()
+      assertEqual(calls.length, 0, 'CI 环境下不应调用 IDE CLI')
+    },
+  },
+  {
+    group: 'IDE 联动',
     name: 'open --dry-run 只打印命令',
     fixture: 'healthy',
     args: ['open', '-p', 'weixin', '--dry-run'],
@@ -1022,7 +1036,8 @@ const cases = [
     group: 'IDE 联动',
     name: 'open 真实执行时把项目路径传给 IDE',
     fixture: 'healthy',
-    args: ['open', '-p', 'weixin'],
+    env: { CI: 'true' },
+    args: ['open', '-p', 'weixin', '--force'],
     async verify(result, ctx) {
       expectExit(result, 0)
       assertIncludes(result.stdout, '已在微信开发者工具中打开', 'stdout')
@@ -1063,7 +1078,8 @@ const cases = [
     group: 'IDE 联动',
     name: 'ide preview 生成 base64 二维码',
     fixture: 'healthy',
-    args: ['ide', 'preview', '-p', 'weixin', '--qr-format', 'base64', '--qr-output', 'out/qr.txt'],
+    env: { CI: 'true' },
+    args: ['ide', 'preview', '-p', 'weixin', '--qr-format', 'base64', '--qr-output', 'out/qr.txt', '--force'],
     async verify(result, ctx) {
       expectExit(result, 0)
       assertIncludes(result.stdout, '二维码已生成（base64）', 'stdout')
@@ -1395,7 +1411,7 @@ async function createContext({ cli, consumerDir, fixturesDir }) {
       readText: async relative => readFile(file(relative), 'utf8'),
       run: async (args, runOptions = {}) => runProcess(cli, args, {
         cwd: dir,
-        env: { GITHUB_ACTIONS: 'false', ...(runOptions.env ?? {}) },
+        env: { CI: '', GITHUB_ACTIONS: 'false', ...(runOptions.env ?? {}) },
         timeout: runOptions.timeout ?? 120_000,
       }),
       ideCalls: async () => {
@@ -1423,7 +1439,7 @@ async function createContext({ cli, consumerDir, fixturesDir }) {
 
       const result = await runProcess(command, args, {
         cwd: dir,
-        env: { GITHUB_ACTIONS: 'false', ...(testCase.env ?? {}) },
+        env: { CI: '', GITHUB_ACTIONS: 'false', ...(testCase.env ?? {}) },
         timeout: testCase.timeout ?? 180_000,
       })
 
