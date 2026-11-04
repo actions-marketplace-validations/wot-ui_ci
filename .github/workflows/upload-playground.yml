@@ -303,11 +303,14 @@ jobs:
             echo
           } >> "$GITHUB_STEP_SUMMARY"
 
-          for summary in "$RUNNER_TEMP/plan-summary.md" "$RUNNER_TEMP/upload-summary.md"; do
-            if [ -s "$summary" ]; then
-              cat "$summary" >> "$GITHUB_STEP_SUMMARY"
-            fi
-          done
+          # 真实上传只看上传结果；dry-run 或上传未产出结果时回退到上传前校验
+          summary_file="$RUNNER_TEMP/upload-summary.md"
+          if [ "$dry_run" = "true" ] || [ ! -s "$summary_file" ]; then
+            summary_file="$RUNNER_TEMP/plan-summary.md"
+          fi
+          if [ -s "$summary_file" ]; then
+            cat "$summary_file" >> "$GITHUB_STEP_SUMMARY"
+          fi
 
           if [ "$dry_run" != "true" ] && [ ! -s "$RUNNER_TEMP/upload-summary.md" ]; then
             echo "> 上传未生成 summary，请查看 “Upload” 步骤日志。" >> "$GITHUB_STEP_SUMMARY"

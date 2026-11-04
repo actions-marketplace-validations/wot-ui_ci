@@ -145,6 +145,7 @@ describe('renderBatchSummary', () => {
       results: [{ durationMs: 10, ok: false, platform: 'weixin', result: createPlan() }],
     }
     const summary = renderBatchSummary(dry, 'upload')
+    expect(summary).toContain('## 小程序上传结果（dry-run）')
     expect(summary).toContain('缺少私钥')
     expect(summary).toContain('❌')
   })

@@ -16,8 +16,10 @@ export function renderBatchSummary(
   result: BatchResult<unknown>,
   command: 'upload' | 'preview',
 ): string {
+  const actionLabel = command === 'upload' ? '上传' : '预览'
+  const dryRunLabel = result.dryRun ? '（dry-run）' : ''
   const lines = [
-    `## 小程序${command === 'upload' ? '上传' : '预览'}结果`,
+    `## 小程序${actionLabel}结果${dryRunLabel}`,
     '',
   ]
 
