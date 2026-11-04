@@ -29,6 +29,7 @@ import { release } from './release'
 import { renderReleaseComment } from './release/github'
 import { uploadPlatform } from './upload'
 import { normalizePlatform } from './utils/platform'
+import { redirectStdoutToStderr } from './utils/stdout'
 import { applyVersion, resolveVersion } from './version-strategy'
 
 export interface RunCliOptions {
@@ -189,35 +190,39 @@ export async function runCli(argv: string[] = process.argv.slice(2), options: Ru
       } = await import('./weixin-diagnostics')
 
       const common = { config: loaded.config, cwd: loaded.cwd }
-      let result: WeixinBuildNpmResult | WeixinDiagnosticResult | WeixinQualityResult
+      type DiagnosticResult = WeixinBuildNpmResult | WeixinDiagnosticResult | WeixinQualityResult
 
-      if (command === 'build-npm') {
-        result = await buildNpm(platform, {
-          ...common,
-          ...(args.ignores ? { ignores: args.ignores.split(',').map(item => item.trim()).filter(Boolean) } : {}),
-        })
-      }
-      else if (command === 'sourcemap') {
-        result = await downloadSourceMap(platform, {
+      const runDiagnostic = async (): Promise<DiagnosticResult> => {
+        if (command === 'build-npm') {
+          return buildNpm(platform, {
+            ...common,
+            ...(args.ignores ? { ignores: args.ignores.split(',').map(item => item.trim()).filter(Boolean) } : {}),
+          })
+        }
+        if (command === 'sourcemap') {
+          return downloadSourceMap(platform, {
+            ...common,
+            ...(args.output ? { output: args.output } : {}),
+            ...(args.robot ? { robot: args.robot } : {}),
+            ...(args.streaming ? { streaming: true } : {}),
+          })
+        }
+        if (command === 'inspect') {
+          return downloadCompiledResult(platform, {
+            ...common,
+            ...(args.output ? { output: args.output } : {}),
+            ...(args.robot ? { robot: args.robot } : {}),
+          })
+        }
+
+        return checkCodeQuality(platform, {
           ...common,
           ...(args.output ? { output: args.output } : {}),
-          ...(args.robot ? { robot: args.robot } : {}),
-          ...(args.streaming ? { streaming: true } : {}),
         })
       }
-      else if (command === 'inspect') {
-        result = await downloadCompiledResult(platform, {
-          ...common,
-          ...(args.output ? { output: args.output } : {}),
-          ...(args.robot ? { robot: args.robot } : {}),
-        })
-      }
-      else {
-        result = await checkCodeQuality(platform, {
-          ...common,
-          ...(args.output ? { output: args.output } : {}),
-        })
-      }
+
+      // miniprogram-ci 会直接往 stdout 打印进度，--json 时需把 SDK 日志改到 stderr，保证 stdout 只有 JSON
+      const result = args.json ? await redirectStdoutToStderr(runDiagnostic) : await runDiagnostic()
 
       if (args.summary) {
         const summaryPath = await writeBatchSummary(

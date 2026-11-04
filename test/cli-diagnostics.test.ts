@@ -288,6 +288,34 @@ describe('runCli quality', () => {
     expect(exitCode).toBe(1)
     expect(stderr.some(line => line.includes('微信代码质量检查失败'))).toBe(true)
   })
+
+  it('--json 时把 SDK 的 stdout 日志改到 stderr', async () => {
+    const cwd = await createProject()
+    const { stdout, writers } = createWriters()
+    mocks.checkCodeQuality.mockImplementationOnce(async () => {
+      process.stdout.write('Initial scan complete. Ready for changes\n')
+      return {
+        checks: 1,
+        issues: [],
+        message: '代码质量检查完成：1 项检查全部通过',
+        ok: true,
+        platform: 'weixin',
+      }
+    })
+    const stderrWrite = vi.spyOn(process.stderr, 'write').mockImplementation(() => true)
+
+    try {
+      const exitCode = await runCli(['quality', '-p', 'weixin', '--json'], { cwd, ...writers })
+
+      expect(exitCode).toBe(0)
+      expect(stdout).toHaveLength(1)
+      expect(() => JSON.parse(stdout[0])).not.toThrow()
+      expect(stderrWrite).toHaveBeenCalledWith('Initial scan complete. Ready for changes\n', undefined, undefined)
+    }
+    finally {
+      stderrWrite.mockRestore()
+    }
+  })
 })
 
 describe('runCli --build-npm', () => {
