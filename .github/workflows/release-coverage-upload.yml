@@ -1,9 +1,11 @@
 name: Release Coverage Upload
 
+# 只认完整版本号：浮动主版本 tag（v0 / v1）由 marketplace-listing.yml 维护，
+# 挪动它不应该重复上传覆盖率。
 on:
   push:
     tags:
-      - 'v*'
+      - 'v*.*.*'
 
 permissions:
   contents: read

@@ -1,0 +1,131 @@
+name: Marketplace Listing
+
+# 发布后的守夜：
+#   1. 校验 https://github.com/marketplace/actions/wot-ui-ci 是否已指向本次版本
+#   2. 把浮动主版本 tag（v0）挪到本次 release
+#
+# 勾选 Marketplace 没有公开 API，所以这里不尝试「发布」，只负责发现「人忘了」。
+on:
+  release:
+    types: [published]
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: 要校验的 release tag，例如 v0.4.1
+        required: true
+        type: string
+
+permissions:
+  contents: write
+  issues: write
+
+concurrency:
+  group: marketplace-listing
+  cancel-in-progress: false
+
+jobs:
+  listing:
+    name: Verify listing
+    # 预发布版本不会进 Marketplace listing，没必要报警
+    if: ${{ !github.event.release.prerelease }}
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+      issues: write
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Resolve tag
+        id: tag
+        env:
+          EVENT_TAG: ${{ github.event.release.tag_name }}
+          INPUT_TAG: ${{ inputs.tag }}
+        run: |
+          set -euo pipefail
+          tag="${EVENT_TAG:-$INPUT_TAG}"
+          if [ -z "$tag" ]; then
+            echo "::error::拿不到 tag：既没有 release 事件，也没有传 workflow_dispatch 的 tag"
+            exit 1
+          fi
+          echo "tag=$tag" >> "$GITHUB_OUTPUT"
+          echo "校验 $tag"
+
+      - name: Wait for listing to catch up
+        env:
+          # Marketplace 有传播延迟，最多等约 4 分钟
+          MARKETPLACE_RETRIES: '12'
+          MARKETPLACE_INTERVAL_MS: '20000'
+        run: node scripts/verify-marketplace-listing.mjs "${{ steps.tag.outputs.tag }}"
+
+      - name: Summarize
+        if: success()
+        run: |
+          {
+            echo "## Marketplace listing 已同步"
+            echo
+            echo "- 版本：\`${{ steps.tag.outputs.tag }}\`"
+            echo "- 链接：https://github.com/marketplace/actions/wot-ui-ci"
+          } >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Open issue when listing is stale
+        if: failure()
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          TAG: ${{ steps.tag.outputs.tag }}
+        run: |
+          set -euo pipefail
+          title="[marketplace] $TAG 未出现在 Marketplace listing"
+          if gh issue list --state open --limit 100 --json title --jq '.[].title' | grep -Fxq "$title"; then
+            echo "已有未关闭的追踪 issue，跳过"
+            echo "::error::$title"
+            exit 0
+          fi
+
+          cat > issue.md <<EOF
+          发布 \`$TAG\` 后探测 https://github.com/marketplace/actions/wot-ui-ci 失败：页面上的版本没有跟上。
+
+          ## 怎么修
+
+          1. 打开仓库 Releases，删除 $TAG 这个 release（**不要**删 tag）
+          2. Draft a new release → Choose a tag → 选已存在的 $TAG
+          3. 勾选 **Publish this Action to the GitHub Marketplace** → Publish
+
+          > 直接复用已有 tag，不会重跑 npm 发布。
+          EOF
+
+          gh issue create --title "$title" --body-file issue.md
+          echo "::error::$title"
+
+  major-tag:
+    name: Move major tag
+    if: ${{ !github.event.release.prerelease }}
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Point vN at this release
+        env:
+          TAG: ${{ github.event.release.tag_name || inputs.tag }}
+        run: |
+          set -euo pipefail
+          if ! [[ "$TAG" =~ ^v[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
+            echo "跳过：$TAG 不是稳定版本号"
+            exit 0
+          fi
+
+          major="v${TAG#v}"
+          major="${major%%.*}"
+
+          git fetch --force --tags origin
+          git tag -f "$major" "$(git rev-list -n 1 "$TAG")"
+          git push --force origin "refs/tags/$major"
+
+          {
+            echo "## 浮动 tag 已更新"
+            echo
+            echo "\`$major\` → \`$TAG\`（用户可以直接写 \`uses: wot-ui/ci@$major\`）"
+          } >> "$GITHUB_STEP_SUMMARY"
