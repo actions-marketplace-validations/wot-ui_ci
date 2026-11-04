@@ -101,6 +101,12 @@ pnpm add -g @wot-ui/ci
 npx wotci -p weixin
 ```
 
+> **交给 AI Agent 一键接入**：把下面这行原样发给你项目里的 Agent，它会装依赖、生成配置，并按你项目现有的发布方式接好上传（GitHub Actions、GitLab CI、Jenkins、自建流水线或纯 npm scripts 都适用）：
+>
+> ```text
+> 给这个项目接入 @wot-ui/ci 小程序 CI：用项目现有包管理器把 @wot-ui/ci 装成 devDependency，执行 wotci init 生成 wotci.config.ts，再把上传接到项目现有的发布方式里——已有 CI 就在它原有的流水线文件里加一个上传步骤，没有就用 npm scripts；appid 与私钥路径一律用环境变量或 CI secrets 注入，不要写进仓库，最后跑 wotci doctor 自检。文档见 https://github.com/wot-ui/ci
+> ```
+
 ## 快速开始
 
 下面以微信小程序为例，三步完成第一次 CI 上传。
