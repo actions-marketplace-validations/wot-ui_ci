@@ -3,13 +3,21 @@ name: Upload Playground
 # 用仓库内的 playground 项目端到端验证 wot-ui-ci：
 #   1. 构建 CLI（dist）与 playground 小程序产物
 #   2. 用 doctor / --dry-run 校验配置、产物与私钥
-#   3. 真正调用微信 miniprogram-ci 上传，并把 JSON 与 Job Summary 存档
+#   3. 按选择执行上传或预览，存档 JSON、二维码、环境记录与 Job Summary
 #
 # push 到 main 时只跑 dry-run 冒烟测试，避免每个提交都占用一个上传版本。
 
 on:
   workflow_dispatch:
     inputs:
+      command:
+        description: Capability to validate
+        required: true
+        default: upload
+        type: choice
+        options:
+          - upload
+          - preview
       platform:
         description: Target platform
         required: true
@@ -33,7 +41,7 @@ on:
         default: '1'
         type: string
       dry_run:
-        description: Only validate config and build output, do not upload
+        description: Only validate locally, do not upload or preview
         required: false
         default: false
         type: boolean
@@ -61,7 +69,7 @@ concurrency:
 
 jobs:
   upload:
-    name: ${{ (github.event_name == 'push' || inputs.dry_run) && 'Playground dry-run' || 'Playground upload' }}
+    name: Playground ${{ inputs.command || 'upload' }} (${{ (github.event_name == 'push' || inputs.dry_run) && 'dry-run' || 'real' }})
     runs-on: ubuntu-latest
     timeout-minutes: 40
     env:
@@ -98,6 +106,7 @@ jobs:
       - name: Resolve run inputs
         id: inputs
         env:
+          INPUT_COMMAND: ${{ inputs.command }}
           INPUT_PLATFORM: ${{ inputs.platform }}
           INPUT_DRY_RUN: ${{ inputs.dry_run }}
           INPUT_ROBOT: ${{ inputs.robot }}
@@ -109,6 +118,16 @@ jobs:
             weixin|alipay|dingtalk) ;;
             *) echo "::error::不支持的平台：$platform"; exit 1 ;;
           esac
+
+          command="${INPUT_COMMAND:-upload}"
+          case "$command" in
+            upload|preview) ;;
+            *) echo "::error::不支持的命令：$command"; exit 1 ;;
+          esac
+          if [ "$command" = "preview" ] && [ "$platform" = "dingtalk" ]; then
+            echo "::error::钉钉未接入 preview，请选择 upload"
+            exit 1
+          fi
 
           dry_run="${INPUT_DRY_RUN:-false}"
           if [ "$EVENT_NAME" = "push" ]; then
@@ -124,6 +143,7 @@ jobs:
           fi
 
           {
+            echo "COMMAND=$command"
             echo "PLATFORM=$platform"
             echo "DRY_RUN=$dry_run"
             echo "WEIXIN_ROBOT=$robot"
@@ -138,11 +158,12 @@ jobs:
           fi
 
           {
+            echo "command=$command"
             echo "platform=$platform"
             echo "dry_run=$dry_run"
           } >> "$GITHUB_OUTPUT"
 
-          echo "platform=$platform dry-run=$dry_run robot=$robot"
+          echo "command=$command platform=$platform dry-run=$dry_run robot=$robot"
 
       - name: Build CLI
         run: pnpm build
@@ -246,15 +267,15 @@ jobs:
           set -e
           printf '%s\n' "$output"
           if [ "$status" -ne 0 ]; then
-            echo "::warning title=Network check failed::doctor --network 未通过（常见原因：插件项目的 IP 白名单或密钥权限），继续执行上传。"
+            echo "::warning title=Network check failed::doctor --network 未通过（常见原因：插件项目的 IP 白名单或密钥权限），继续执行所选命令。"
           fi
 
-      - name: Upload plan (dry-run)
+      - name: Capability plan (dry-run)
         id: plan
         timeout-minutes: 5
         run: |
           set -euo pipefail
-          node dist/bin.mjs upload \
+          node dist/bin.mjs "$COMMAND" \
             --cwd playground \
             --config wotci.config.ts \
             --platform "$PLATFORM" \
@@ -265,7 +286,7 @@ jobs:
 
       - name: Upload
         id: upload
-        if: ${{ steps.inputs.outputs.dry_run != 'true' }}
+        if: ${{ steps.inputs.outputs.dry_run != 'true' && steps.inputs.outputs.command == 'upload' }}
         timeout-minutes: 15
         run: |
           set -euo pipefail
@@ -277,34 +298,97 @@ jobs:
             --summary "$RUNNER_TEMP/upload-summary.md" \
             | tee "$RUNNER_TEMP/upload.json"
 
+      - name: Preview
+        id: preview
+        if: ${{ steps.inputs.outputs.dry_run != 'true' && steps.inputs.outputs.command == 'preview' }}
+        timeout-minutes: 15
+        run: |
+          set -euo pipefail
+          node dist/bin.mjs preview \
+            --cwd playground \
+            --config wotci.config.ts \
+            --platform "$PLATFORM" \
+            --qr-output "$RUNNER_TEMP/preview.png" \
+            --json \
+            --summary "$RUNNER_TEMP/preview-summary.md" \
+            | tee "$RUNNER_TEMP/preview.json"
+
+      - name: Record validation context
+        if: always()
+        env:
+          PLAN_OUTCOME: ${{ steps.plan.outcome }}
+          UPLOAD_OUTCOME: ${{ steps.upload.outcome }}
+          PREVIEW_OUTCOME: ${{ steps.preview.outcome }}
+        run: |
+          node --input-type=module <<'NODE'
+          import { readFileSync, writeFileSync } from 'node:fs'
+          import os from 'node:os'
+          import path from 'node:path'
+
+          function version(file) {
+            try { return JSON.parse(readFileSync(file, 'utf8')).version ?? null }
+            catch { return null }
+          }
+          const env = process.env
+          const context = {
+            schemaVersion: 1,
+            recordedAt: new Date().toISOString(),
+            commit: env.GITHUB_SHA,
+            runUrl: `${env.GITHUB_SERVER_URL}/${env.GITHUB_REPOSITORY}/actions/runs/${env.GITHUB_RUN_ID}`,
+            runAttempt: env.GITHUB_RUN_ATTEMPT,
+            event: env.EVENT_NAME,
+            command: env.COMMAND ?? null,
+            platform: env.PLATFORM ?? null,
+            mode: env.DRY_RUN === 'true' ? 'dry-run' : env.DRY_RUN === 'false' ? 'real' : 'unknown',
+            projectType: env.PLATFORM === 'weixin' ? 'miniProgram' : null,
+            cliVersion: version('package.json'),
+            node: process.version,
+            os: { platform: process.platform, arch: process.arch, release: os.release(), runnerImage: env.ImageOS ?? null, runnerImageVersion: env.ImageVersion ?? null },
+            sdks: Object.fromEntries(['miniprogram-ci', 'minidev', 'dingtalk-miniapp-opensdk'].map(name => [name, version(`node_modules/${name}/package.json`)])),
+            outcomes: { plan: env.PLAN_OUTCOME, upload: env.UPLOAD_OUTCOME, preview: env.PREVIEW_OUTCOME },
+          }
+          // 仅写上述允许字段，不保存凭证、完整配置或整个环境变量。
+          writeFileSync(path.join(env.RUNNER_TEMP, 'validation-context.json'), `${JSON.stringify(context, null, 2)}\n`)
+          NODE
+
       - name: Write job summary
         if: always()
         run: |
           set -euo pipefail
           platform="${PLATFORM:-weixin}"
-          dry_run="${DRY_RUN:-false}"
+          command="${COMMAND:-upload}"
+          dry_run="${DRY_RUN:-unknown}"
+          case "$dry_run" in
+            true) mode='dry-run（仅本地校验）' ;;
+            false) mode='真实平台调用（是否完成见步骤结果）' ;;
+            *) mode='未解析，见输入步骤错误' ;;
+          esac
           event_name="${EVENT_NAME:-unknown}"
           version="${WOTCI_VERSION:-$(node -p "require('./playground/package.json').version")}"
           desc="${WOTCI_DESC:-$(node -p "require('./playground/package.json').description || ''")}"
 
           {
-            echo "## Playground 上传验证"
+            echo "## Playground 能力验证"
             echo
             echo "| 项目 | 值 |"
             echo "| --- | --- |"
             echo "| 平台 | $platform |"
-            echo "| 模式 | $([ "$dry_run" = "true" ] && echo 'dry-run（不上传）' || echo '真实上传') |"
+            echo "| 命令 | $command |"
+            echo "| 模式 | $mode |"
+            echo "| Commit | $GITHUB_SHA |"
+            echo "| Node | $(node --version) |"
             echo "| 触发方式 | $event_name |"
             echo "| CLI 版本 | $(node -p "require('./package.json').version") |"
             echo "| 版本 | $version |"
             echo "| 描述 | $desc |"
             echo "| dry-run 校验 | ${{ steps.plan.outcome }} |"
             echo "| 上传 | ${{ steps.upload.outcome }} |"
+            echo "| 预览 | ${{ steps.preview.outcome }} |"
             echo
           } >> "$GITHUB_STEP_SUMMARY"
 
-          # 真实上传只看上传结果；dry-run 或上传未产出结果时回退到上传前校验
-          summary_file="$RUNNER_TEMP/upload-summary.md"
+          # 找不到真实结果时展示 plan，但不能把本地校验当作平台调用成功。
+          summary_file="$RUNNER_TEMP/$command-summary.md"
           if [ "$dry_run" = "true" ] || [ ! -s "$summary_file" ]; then
             summary_file="$RUNNER_TEMP/plan-summary.md"
           fi
@@ -312,9 +396,10 @@ jobs:
             cat "$summary_file" >> "$GITHUB_STEP_SUMMARY"
           fi
 
-          if [ "$dry_run" != "true" ] && [ ! -s "$RUNNER_TEMP/upload-summary.md" ]; then
-            echo "> 上传未生成 summary，请查看 “Upload” 步骤日志。" >> "$GITHUB_STEP_SUMMARY"
+          if [ "$dry_run" != "true" ] && [ ! -s "$RUNNER_TEMP/$command-summary.md" ]; then
+            echo "> 平台调用未生成 summary；上方 plan 仅代表本地校验，请查看 Upload / Preview 步骤日志。" >> "$GITHUB_STEP_SUMMARY"
           fi
+          echo "> 环境与 SDK 精确版本见 artifact 中的 validation-context.json；扫码验收需另外记录。" >> "$GITHUB_STEP_SUMMARY"
 
       - name: Upload diagnostics
         if: always()
@@ -328,6 +413,10 @@ jobs:
             ${{ runner.temp }}/plan-summary.md
             ${{ runner.temp }}/upload.json
             ${{ runner.temp }}/upload-summary.md
+            ${{ runner.temp }}/preview.json
+            ${{ runner.temp }}/preview-summary.md
+            ${{ runner.temp }}/preview.png
+            ${{ runner.temp }}/validation-context.json
             playground/dist/build/mp-weixin/project.config.json
             playground/dist/build/mp-alipay/project.config.json
 

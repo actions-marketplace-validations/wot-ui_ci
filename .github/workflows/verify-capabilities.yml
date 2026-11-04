@@ -52,6 +52,8 @@ jobs:
         node:
           - 20
           - 22
+          - 24
+          - 26
 
     steps:
       - name: Checkout

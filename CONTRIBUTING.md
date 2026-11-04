@@ -52,7 +52,7 @@ docs/           路线图与发布流程
 ## 测试
 
 - 测试默认离线，不需要真实 appid、私钥或网络；上传类能力通过 mock 与假 CLI 覆盖
-- 覆盖率阈值 95%（statements / branches / functions / lines），`pnpm test:coverage` 会校验
+- 覆盖率阈值 95%（statements / branches / functions / lines），`pnpm test:coverage` 会校验；CI 由 Linux Node 24 单独执行该门禁并保留报告，其余组合运行常规测试
 - 修 bug 请附能复现的用例；新增命令请覆盖参数校验、`--dry-run` 与 JSON 输出
 - 改动 CLI 行为后建议跑一遍端到端自检：`pnpm verify:capabilities`（构建 → 打包 → 临时项目安装 → 逐项执行）
 - 动了 `action.yml` 或 composite 接线，跑 `pnpm verify:action`
@@ -83,7 +83,7 @@ feat(action): 新增 composite GitHub Action
 2. 提交前本地跑通：`pnpm lint && pnpm typecheck:all && pnpm test:run`
 3. 面向用户的变化（命令、参数、配置字段、行为）同步更新 README —— README 是主要文档
 4. 不要提交私钥、appid、真实项目配置；`dist`、`coverage`、`.wotci`、`.pnpm-store` 已在 `.gitignore` 中
-5. CI 会跑 lint + typecheck，以及四组矩阵（Linux Node 20/22、Windows、macOS）的 build + test，另加能力自检与 playground 冒烟
+5. CI 会跑 lint + typecheck，以及八组矩阵（Linux Node 20/22/24/26、Windows Node 20/24、macOS Node 20/24）的 build + test；Linux Node 24 执行覆盖率门禁。能力自检在 Linux Node 20/22/24/26 打包、安装并验证消费者项目，另有 playground 冒烟
 
 ## 发布
 

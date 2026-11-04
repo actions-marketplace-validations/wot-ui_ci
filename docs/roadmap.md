@@ -58,10 +58,10 @@ M0 → M1 → M2 顺序推进；真实平台验证贯穿每个阶段。M3 不是
 
 **交付内容**
 
-- [ ] 建立能力与验证矩阵：区分已实现、离线测试、真实平台通过、当前受限；记录 commit / 包版本、SDK 版本、Node、系统、项目类型、日期和证据链接。
-- [ ] Linux 增加 Node 24/26 的安装、构建、测试与打包消费验证；Windows / macOS 至少验证选定的默认 LTS。候选默认值为 Node 24，SDK 实测通过后再切换。
-- [ ] 在单个 Linux job 执行 `pnpm test:coverage`，保留现有 95% 阈值；其它系统运行常规测试，避免重复计算覆盖率。
-- [ ] 基于现有 `upload-playground.yml` 补真实上传 / 预览验收清单，优先微信普通小程序，再支付宝上传与预览、钉钉上传。
+- [x] 建立[能力与验证矩阵](support-matrix.md)及[验收记录模板](platform-validation.md)：分别记录实现、离线测试与真实平台证据；尚无证据的组合标为待验证。
+- [x] Linux Node 24/26 安装、构建、测试与打包消费验证，以及 Windows / macOS Node 24 的矩阵，在提交 `66a5fd5` 的远端 CI 中通过；运行链接见[运行时记录](verification/2026-11-04-runtime-matrix.md)。候选默认值为 Node 24，真实平台 SDK 实测通过后再切换；后续提交需重新验证。
+- [x] 在单个 Linux Node 24 job 执行 `pnpm test:coverage`，保留现有 95% 阈值并上传报告；其它组合运行常规测试。提交 `66a5fd5` 的远端门禁及报告上传已通过，见[运行时记录](verification/2026-11-04-runtime-matrix.md)。
+- [x] 基于现有 `upload-playground.yml` 补[真实上传 / 预览验收清单](platform-validation.md)、预览入口与环境记录；平台实测按矩阵另行验收。
 - [ ] 核对 npm 包、完整版本 tag、GitHub Release、Marketplace listing 和浮动 tag 的一致性，记录结果；沿用现有发布脚本。
 - [ ] 更新支持政策：0.4.x 保留既有兼容范围；如提高 Node 最低版本，放入明确标注的 0.5 兼容性变更，附迁移说明。未验证的 Node / SDK 组合不列为正式支持。
 

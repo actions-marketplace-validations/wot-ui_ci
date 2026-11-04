@@ -1233,7 +1233,7 @@ DINGTALK_APPID=xxx DINGTALK_TOKEN=xxx pnpm upload:playground:dingtalk
 
 GitHub Actions 可参考 [.github/workflows/upload-playground.yml](.github/workflows/upload-playground.yml)。
 
-工作流会先构建 CLI 与 playground 产物，再依次执行 `doctor`、`upload --dry-run` 和真实上传，并把 JSON 结果与 Step Summary 存档。微信 / 支付宝私钥从 Secrets 写入 `$RUNNER_TEMP` 并设置 `chmod 600`，不会落到工作区；上传结束后会删除。
+工作流会先构建 CLI 与 playground 产物，再执行 `doctor`、所选命令的 `--dry-run` 和真实上传或预览，并存档 JSON、二维码、环境与 SDK 精确版本及 Step Summary。微信 / 支付宝私钥从 Secrets 写入 `$RUNNER_TEMP` 并设置 `chmod 600`，执行结束后会删除。能力边界见 [支持矩阵](docs/support-matrix.md)，操作步骤和记录模板见 [平台验收指南](docs/platform-validation.md)。
 
 需要在仓库 Secrets 中配置：
 
@@ -1241,7 +1241,7 @@ GitHub Actions 可参考 [.github/workflows/upload-playground.yml](.github/workf
 - 支付宝：`ALIPAY_APPID`、`ALIPAY_TOOL_ID`、`ALIPAY_PRIVATE_KEY`
 - 钉钉：`DINGTALK_APPID`、`DINGTALK_TOKEN`
 
-支持手动触发并选择平台、版本、描述、上传机器人（1-30）以及 `dry-run`。push 到 `main` 且改动涉及 CLI / playground 时只跑 dry-run 冒烟测试，不会消耗上传版本。微信上传要求调用方 IP 在白名单内，GitHub 托管 Runner 的出口 IP 不固定，需要在微信公众平台关闭 IP 白名单（或改用自建 Runner）。
+支持手动触发并选择 `command=upload/preview`、平台、版本、描述、上传机器人（1-30）以及 `dry-run`；preview 支持微信和支付宝，扫码结果需另外记录。push 到 `main` 且改动涉及 CLI / playground 时只跑 dry-run 冒烟测试，不会消耗上传版本。微信上传要求调用方 IP 在白名单内，GitHub 托管 Runner 的出口 IP 不固定，需要在微信公众平台关闭 IP 白名单（或改用自建 Runner）。
 
 ## 开发
 
@@ -1256,7 +1256,7 @@ pnpm verify:capabilities
 
 `pnpm verify:capabilities` 会构建、打包，并在临时项目里安装后逐项验证 CLI / JS API 能力，见 [能力自检](#能力自检)。
 
-测试覆盖率由 vitest 统计，并对 statements / branches / functions / lines 设置 95% 阈值；`src/bin.ts` 是进程入口，依赖 `process.exit`，不纳入覆盖率统计。
+测试覆盖率由 vitest 统计，并对 statements / branches / functions / lines 设置 95% 阈值；CI 在 Linux Node 24 执行覆盖率门禁并存档报告，其余组合运行常规测试。`src/bin.ts` 是进程入口，依赖 `process.exit`，不纳入覆盖率统计。运行时验证覆盖 Linux Node 20/22/24/26 与 Windows/macOS Node 20/24，实际通过证据见 [支持矩阵](docs/support-matrix.md)。
 
 开发约定、提交信息规范与 PR 流程见 [CONTRIBUTING.md](CONTRIBUTING.md)。
 
