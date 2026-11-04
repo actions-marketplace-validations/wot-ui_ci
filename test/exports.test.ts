@@ -9,7 +9,12 @@
  */
 import { readFile } from 'node:fs/promises'
 import path from 'node:path'
-import { describe, expect, it } from 'vitest'
+import { describe, expect, it, vi } from 'vitest'
+
+// 只是校验公开导出面，不需要真实加载两个厂商 SDK
+vi.mock('minidev', () => ({}))
+vi.mock('dingtalk-miniapp-opensdk', () => ({}))
+vi.mock('miniprogram-ci', () => ({}))
 
 const packageJsonPath = path.resolve(import.meta.dirname, '../package.json')
 
@@ -32,5 +37,18 @@ describe('package exports', () => {
     expect(packageJson.main).toBe('./dist/index.mjs')
     expect(packageJson.types).toBe('./dist/index.d.mts')
     expect(packageJson.bin?.wotci).toBe('./dist/bin.mjs')
+  })
+
+  it('exports the documented JS API as named exports', async () => {
+    const api = await import('../src/index')
+
+    for (const name of [
+      'initProject',
+      'resolveVersion',
+      'runDoctor',
+      'setExperience',
+    ] as const) {
+      expect(api[name], `${name} 应该在 README 的 JS API 中可用`).toBeTypeOf('function')
+    }
   })
 })
