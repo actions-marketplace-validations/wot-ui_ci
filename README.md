@@ -51,6 +51,7 @@ wotci.config.ts + 构建产物
   - [打开开发者工具](#打开开发者工具)
 - [CI 集成](#ci-集成)
   - [GitHub Action](#github-action)
+  - [能力自检](#能力自检)
   - [Vite 与 uni-app 插件](#vite-与-uni-app-插件)
 - [JS API](#js-api)
 - [错误模型](#错误模型)
@@ -914,6 +915,16 @@ jobs:
 - 私钥需要在 workflow 中提前落盘；建议写入 `$RUNNER_TEMP` 并执行 `chmod 600`，[upload-playground.yml](.github/workflows/upload-playground.yml) 有完整示例
 - `release` 的 PR 评论需要 `pull-requests: write` 和 `issues: write`
 
+### 能力自检
+
+仓库里的 [verify-capabilities.yml](.github/workflows/verify-capabilities.yml) 会在 PR 上逐项验证 CLI 能力：帮助与参数校验、配置加载（TS 工厂 / `-c` / `.minicirc`）、`init`、`doctor`、`upload`（单平台、逗号列表、`--all`、并发、summary、`--dry-run` 校验失败）、`preview`（含钉钉不支持）、`release`、版本与体验版参数校验、IDE 联动的参数透传、微信构建与诊断（`build-npm` / `quality` / 平台守卫），以及 JS API、Vite 插件与发包产物。整套验证离线执行，不需要真实 appid 与私钥；真实上传仍由 [upload-playground.yml](.github/workflows/upload-playground.yml) 覆盖。
+
+本地跑同一套验证（会构建、打包，并在临时项目里 `npm install` 后逐项执行）：
+
+```sh
+pnpm verify:capabilities
+```
+
 ### Vite 与 uni-app 插件
 
 ```ts
@@ -1238,7 +1249,10 @@ pnpm typecheck
 pnpm test:run
 pnpm test:coverage
 pnpm build
+pnpm verify:capabilities
 ```
+
+`pnpm verify:capabilities` 会构建、打包，并在临时项目里安装后逐项验证 CLI / JS API 能力，见 [能力自检](#能力自检)。
 
 测试覆盖率由 vitest 统计，并对 statements / branches / functions / lines 设置 95% 阈值；`src/bin.ts` 是进程入口，依赖 `process.exit`，不纳入覆盖率统计。
 

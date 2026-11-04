@@ -50,6 +50,7 @@
     "test:run": "vitest run",
     "test:coverage": "vitest run --coverage",
     "test:exports": "vitest run test/exports.test.ts",
+    "verify:capabilities": "node scripts/verify-capabilities.mjs",
     "typecheck": "tsc",
     "typecheck:all": "pnpm typecheck && pnpm typecheck:playground",
     "prepare": "simple-git-hooks",

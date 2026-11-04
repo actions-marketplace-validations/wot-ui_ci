@@ -1,0 +1,196 @@
+name: Verify Capabilities
+
+# 逐项验证 wot-ui-ci 的全部能力，离线运行、不需要真实 appid / 私钥 / 网络上传：
+#
+#   帮助与参数校验 · 配置加载（TS 工厂 / -c / .minicirc）· init · doctor
+#   upload（单平台、逗号列表、--all、并发、summary、dry-run 校验失败）
+#   preview（含钉钉不支持）· release（构建命令、平台子集、summary）
+#   version / experience 参数校验 · IDE 联动（本地假 CLI 校验参数透传）
+#   微信构建与诊断（build-npm / quality / 平台守卫）· JS API / Vite 插件 / 发包产物
+#
+# 验证方式与真实用户一致：pnpm pack 后在临时“消费者”项目里 npm install，再用安装出来的
+# wotci 执行各命令。真实上传另见 upload-playground.yml。
+
+on:
+  push:
+    branches:
+      - main
+    paths:
+      - 'src/**'
+      - 'scripts/**'
+      - 'test/**'
+      - action.yml
+      - package.json
+      - pnpm-lock.yaml
+      - pnpm-workspace.yaml
+      - tsconfig.json
+      - tsdown.config.ts
+      - .github/workflows/verify-capabilities.yml
+
+  pull_request:
+    branches:
+      - main
+
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: verify-capabilities-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  capabilities:
+    name: Capabilities (node ${{ matrix.node }})
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+
+    strategy:
+      fail-fast: false
+      matrix:
+        node:
+          - 20
+          - 22
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+
+      - name: Setup pnpm
+        uses: pnpm/action-setup@v4
+        with:
+          run_install: false
+
+      - name: Setup Node.js ${{ matrix.node }}
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ matrix.node }}
+          cache: pnpm
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      # 脚本自身完成 build / pack / 消费者安装，并逐项断言退出码、JSON 结构与产物
+      - name: Verify every capability
+        run: >-
+          node scripts/verify-capabilities.mjs
+          --workspace "$RUNNER_TEMP/wotci-verify"
+          --keep
+          --summary "$GITHUB_STEP_SUMMARY"
+
+      - name: Upload failing fixtures
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: verify-capabilities-node${{ matrix.node }}
+          if-no-files-found: ignore
+          retention-days: 7
+          path: ${{ runner.temp }}/wotci-verify/consumer/.verify
+
+  action:
+    name: Composite action
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+
+      - name: Setup pnpm
+        uses: pnpm/action-setup@v4
+        with:
+          run_install: false
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: pnpm
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Build CLI
+        run: pnpm build
+
+      - name: Prepare fixture project
+        # 用 action.yml 消费的同一份脚本跑真实 CLI：夹具里放一个指向本地 dist 的 wotci，
+        # 这样 action 会优先使用它，而不是去 npx 拉取线上版本。
+        run: |
+          set -euo pipefail
+
+          fixture="$RUNNER_TEMP/action-fixture"
+          mkdir -p "$fixture/dist/build/mp-weixin" "$fixture/dist/build/mp-alipay" "$fixture/keys" "$fixture/node_modules/.bin"
+
+          node -e "require('node:fs').writeFileSync('$fixture/keys/weixin.private.key', require('node:crypto').generateKeyPairSync('rsa', { modulusLength: 2048, privateKeyEncoding: { format: 'pem', type: 'pkcs8' }, publicKeyEncoding: { format: 'pem', type: 'spki' } }).privateKey)"
+
+          printf '%s\n' '{"appid":"wx0000000000000000","projectname":"action-fixture","miniprogramRoot":"./"}' > "$fixture/dist/build/mp-weixin/project.config.json"
+          printf '%s\n' '{"pages":["pages/index/index"]}' > "$fixture/dist/build/mp-weixin/app.json"
+          printf '%s\n' '{"appid":"2021000000000000","projectname":"action-fixture"}' > "$fixture/dist/build/mp-alipay/project.config.json"
+          printf '%s\n' '{"pages":["pages/index/index"]}' > "$fixture/dist/build/mp-alipay/app.json"
+
+          cat > "$fixture/wotci.config.mjs" <<'EOF'
+          export default {
+            version: '0.0.1',
+            desc: 'composite action fixture',
+            weixin: {
+              appid: 'wx0000000000000000',
+              privateKeyPath: 'keys/weixin.private.key',
+              projectPath: 'dist/build/mp-weixin',
+              robot: 1,
+            },
+            alipay: {
+              appid: '2021000000000000',
+              toolId: 'wotci-action-fixture',
+              privateKey: 'inline-key-for-plan-check',
+              projectPath: 'dist/build/mp-alipay',
+            },
+          }
+          EOF
+
+          cat > "$fixture/node_modules/.bin/wotci" <<EOF
+          #!/usr/bin/env bash
+          exec node "\${GITHUB_WORKSPACE}/dist/bin.mjs" "\$@"
+          EOF
+          chmod +x "$fixture/node_modules/.bin/wotci"
+
+          echo "ACTION_SUMMARY=$RUNNER_TEMP/action-summary.md" >> "$GITHUB_ENV"
+
+      - name: Doctor through the action
+        uses: ./
+        with:
+          command: doctor
+          working-directory: ${{ runner.temp }}/action-fixture
+
+      - name: Upload dry-run through the action
+        uses: ./
+        with:
+          command: upload
+          platform: weixin,alipay
+          working-directory: ${{ runner.temp }}/action-fixture
+          dry-run: 'true'
+          json: 'true'
+          summary: ${{ runner.temp }}/action-summary.md
+
+      - name: Assert action outputs
+        run: |
+          set -euo pipefail
+
+          if [ ! -s "$ACTION_SUMMARY" ]; then
+            echo "::error::action 没有把 summary 写到 $ACTION_SUMMARY"
+            exit 1
+          fi
+
+          cat "$ACTION_SUMMARY"
+
+          for platform in weixin alipay; do
+            if ! grep -q "| $platform | ✅ |" "$ACTION_SUMMARY"; then
+              echo "::error::summary 里缺少 $platform 的 dry-run 校验结果"
+              exit 1
+            fi
+          done
