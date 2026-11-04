@@ -1262,7 +1262,7 @@ pnpm verify:capabilities
 
 ## 路线图
 
-后续功能规划与各平台能力盘点见 [docs/roadmap.md](docs/roadmap.md)。
+后续按「支持范围与质量基线 → 执行可靠性 → CI 接入与结果交付」推进；多应用、持续预览和 monorepo 按真实需求安排。阶段任务、验收条件与 1.0 门槛见 [docs/roadmap.md](docs/roadmap.md)。
 
 ## License
 

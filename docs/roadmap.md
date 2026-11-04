@@ -1,564 +1,170 @@
-# @wot-ui/ci 功能路线图
+# @wot-ui/ci 后续路线
 
-> 目标：从「三端上传脚本」升级为「小程序 CI 工具箱」，覆盖开发预览、发布、版本管理和 CI 集成。
+> 更新：2026-11-04。代码基线：`bd5c662`，`package.json` 版本：`0.4.1`。
 >
-> 原则：以官方 SDK 的实际能力为准；CLI 与 JS API 同构；默认安全；CI 友好；能力缺失要显式报错，不伪造。
+> 方向：让小程序团队稳定接入、执行和排查发布流程。优先做可靠性、真实平台验证和交付体验，再按使用反馈扩展工作流。
+>
+> 本文是实施规划，版本号是建议的交付窗口，未勾选事项均未完成。本次代码盘点不代表 npm、Marketplace 或真实平台验收通过。旧路线中的 v0.4～v0.8 编号不再作为实施进度依据，历史内容可通过 Git 查询。
 
-## 1. 官方 CI 能力盘点
+## 1. 产品定位与范围
 
-### 1.1 微信 `miniprogram-ci` 2.x
+核心用户是使用 uni-app 或原生小程序的开发者，以及维护项目流水线的团队。主流程保持清晰：**构建产物 → 本地检查 → 上传 / 预览 → 结果与产物交付 → 失败排查**。
 
-| 能力 | API | 关键参数 / 返回 |
+- CLI、JS API、GitHub Action、Vite 插件共享执行与结果语义。
+- 微信作为优先验证链路；支付宝、钉钉按已接入能力维护，有真实项目后补齐对应验收。
+- 接受任意构建工具生成的有效小程序产物；构建仍由项目现有脚本负责。
+- `release` 当前代表构建和上传编排，不承诺平台审核、上架或线上回滚。
+- 现有 IDE 联动继续维护；近期投入集中在 CI 主流程。
+
+按个人或小团队维护规模规划，每次推进一个主要里程碑。没有用户反馈、性能数据或平台实测依据的扩展，不直接进入开发。
+
+## 2. 当前基线：已有能力与实际缺口
+
+### 已有实现
+
+| 能力 | 代码入口 | 当前边界 |
 | --- | --- | --- |
-| 上传 | `upload(options)` | `version`、`desc`、`robot`、`setting`、`threads`、`useCOS`、`onProgressUpdate`；返回 `subPackageInfo`、`pluginInfo` |
-| 预览 | `preview(options)` | `qrcodeFormat: terminal \| image \| base64`、`qrcodeOutputDest`、`pagePath`、`searchQuery`、`scene`、`robot`、`setting` |
-| 打开 / 关闭 IDE | 开发者工具 CLI：`open` / `close` / `quit` / `auto` | 需额外调用 IDE CLI，不是 miniprogram-ci API |
-| 最新版本 | `getLatestVersion({ project })` | `latestVersion`、`grayReleaseVersion` |
-| SourceMap | `getDevSourceMap(options)` | `robot`、`sourceMapSavePath`、`streaming` |
-| 构建 npm | `packNpm` / `packNpmManually` | 对应开发者工具「构建 npm」 |
-| 编译产物 | `getCompiledResult(options, savePath)` | 导出最终上传的 zip，便于排查包体积 |
-| 代码质量 | `checkCodeQuality(project)` | 返回检查项数组，可落盘 JSON |
-| 云开发 | `cloud.uploadFunction` / `uploadStorage` 等 | 云函数、静态存储、定时触发器 |
-| 网络代理 | `proxy(...)` | 配置 CI 请求代理 |
+| 三端上传、微信 / 支付宝预览 | `src/platforms/`、`src/upload.ts`、`src/preview.ts` | 钉钉预览未接入；平台返回内容存在差异 |
+| 批量执行、并发、dry-run | `src/batch.ts`、`src/plan.ts` | 已有单平台失败汇总；缺统一的上传超时 / 取消控制 |
+| JSON、Markdown 摘要 | `src/output/`、`src/cli.ts` | 已有 `schemaVersion: 1`；各命令的输出构造仍分散 |
+| 发布编排、历史、PR 评论 | `src/release/` | 构建命令已有内部超时；历史主要是本地文件，非跨 Runner 的持久记录 |
+| 版本策略、预算、体检、初始化 | `src/version-strategy.ts`、`src/budget.ts`、`src/doctor.ts`、`src/init.ts` | 自动版本查询失败会回退；预算依据 SDK 结果判定，不能视为上传前阻断 |
+| 微信构建与诊断、IDE 联动 | `src/weixin-diagnostics.ts`、`src/ide/` | 部分功能依赖平台服务、本机 IDE 和登录态 |
+| Vite 插件、GitHub Action | `src/vite.ts`、`action.yml` | 插件只执行一次构建后动作；Action 尚无声明的结构化 outputs |
+| 测试、打包消费验证、发布工作流 | `test/`、`scripts/verify-capabilities.mjs`、`.github/workflows/` | 已有跨系统单测与临时消费者验证，不等于真实 SDK 上传验证 |
 
-### 1.2 支付宝 `minidev`
+### 影响下一阶段排序的发现
 
-| 能力 | API | 关键参数 / 返回 |
+1. **运行时需要更新。** 当前 `engines` 为 Node >=20，常规 CI 主要覆盖 20/22。官方当前将 20 标记为 EOL，22/24/26 为 LTS；应先验证 SDK 组合，再调整默认值和支持范围。[Node.js 官方版本状态](https://nodejs.org/en/about/previous-releases)
+2. **执行完成与业务结果需要分开。** 上传成功后预算超限会使整体失败；网络超时也不能证明远端未收到上传。重试前需要知道已发生的副作用。
+3. **版本来源需要透明。** `src/version-strategy.ts` 会吞掉查询异常并使用其它平台或本地版本；需要让用户看见来源、降级原因及冲突风险。
+4. **已有测试基础应补缺口。** 覆盖率阈值已设为 95%，但常规 CI 和发布校验调用普通测试命令，未实际执行覆盖率门禁。能力自检已经包含 pack / install，应扩展现有流程。
+5. **接入后仍缺少方便消费的结果。** Action 已支持命令和 summary，但缺结果文件、二维码路径等 outputs；本地 history 在临时 Runner 中需要显式保存与恢复。
+6. **真实支持范围需要证据。** 本次未执行平台上传，也未核验线上发布状态；支持矩阵应记录 SDK、Node、系统、项目类型与验证记录，避免把 mock 成功写成平台可用。
+
+## 3. 分阶段路线
+
+| 阶段 | 优先级 | 交付主题 | 建议版本窗口 | 完成标志 |
+| --- | --- | --- | --- | --- |
+| M0 | P0 | 校准支持范围与质量基线 | 0.4.x 修复；破坏性调整进入 0.5 | 建立可复跑基线和平台证据清单 |
+| M1 | P0 | 可控、可诊断的执行 | 0.5 | 卡住可结束，失败能判断远端状态与下一步 |
+| M2 | P1 | CI 接入与结果交付 | 0.6 | 新项目能按模板接通，后续步骤直接消费结果 |
+| M3 | P2，有条件启动 | 多应用 / 多环境与持续预览 | 0.7+ | 真实重复场景被覆盖，且不破坏已有单项目配置 |
+| 稳定版门槛 | P1 | 公共契约与维护承诺 | 1.0 | 核心流程有真实使用记录，兼容性规则明确 |
+
+M0 → M1 → M2 顺序推进；真实平台验证贯穿每个阶段。M3 不是发布 1.0 的前置条件。
+
+### M0：把当前版本的支持承诺做实
+
+**交付内容**
+
+- [ ] 建立能力与验证矩阵：区分已实现、离线测试、真实平台通过、当前受限；记录 commit / 包版本、SDK 版本、Node、系统、项目类型、日期和证据链接。
+- [ ] Linux 增加 Node 24/26 的安装、构建、测试与打包消费验证；Windows / macOS 至少验证选定的默认 LTS。候选默认值为 Node 24，SDK 实测通过后再切换。
+- [ ] 在单个 Linux job 执行 `pnpm test:coverage`，保留现有 95% 阈值；其它系统运行常规测试，避免重复计算覆盖率。
+- [ ] 基于现有 `upload-playground.yml` 补真实上传 / 预览验收清单，优先微信普通小程序，再支付宝上传与预览、钉钉上传。
+- [ ] 核对 npm 包、完整版本 tag、GitHub Release、Marketplace listing 和浮动 tag 的一致性，记录结果；沿用现有发布脚本。
+- [ ] 更新支持政策：0.4.x 保留既有兼容范围；如提高 Node 最低版本，放入明确标注的 0.5 兼容性变更，附迁移说明。未验证的 Node / SDK 组合不列为正式支持。
+
+**验收条件**
+
+- 有一份可追溯的基线记录；失败或缺凭证的项标为待验证，不能标为通过。
+- 正式宣称支持的运行时组合通过离线检查；微信主链路至少有一次真实上传与预览记录。支付宝、钉钉未完成的实测单独披露。
+- 发布状态逐项记录，不能以“工作流文件存在”替代线上核验。
+
+### M1：让执行可结束、失败可解释
+
+**交付内容**
+
+- [ ] 为 upload / preview / release 引入一致的超时和取消策略；CLI 提供超时配置，JS API 接收取消信号。区分构建超时、平台超时、用户取消。
+- [ ] 明确 SDK 取消边界：不能只用 `Promise.race` 返回错误却继续后台上传；不支持取消的 SDK 评估子进程隔离，并验证进程树清理。远端提交结果无法确认时记录为 unknown。
+- [ ] 统一结果语义：保留兼容的 `ok`，另行表达执行阶段、上传是否完成、预算判定、历史 / 评论警告与远端状态。已有公开字段不在补丁版本直接改名。
+- [ ] 自动版本策略输出解析来源和降级原因；提供查询失败时终止的严格模式。对不支持查询的平台和项目类型给出明确说明，不保证全局唯一递增。
+- [ ] 补 release 的分阶段检查：构建前检查配置与必要凭证，构建后检查产物；`--skip-build` 检查现有产物。dry-run 明确区分“计划生成”与“产物已验证”。
+- [ ] 增加错误分类与处理建议，覆盖权限、白名单、版本冲突、产物缺失、超时等；未知错误保留可诊断原因，日志、JSON、summary、history 对凭证做一致脱敏。
+- [ ] 只对可确认安全的只读查询引入有上限的重试。上传结果未知时默认不自动重试，也不自动删除版本或回滚其它平台。
+
+**验收条件**
+
+- 使用假 SDK / 子进程复现永久挂起、取消、部分平台失败，断言进程确实结束、后续任务按策略停止或继续、结果可序列化。
+- 上传已完成但预算超限时，输出能明确表达两种状态；评论失败不会被误报为上传失败。
+- 版本查询失败的来源和回退原因可见；dry-run 不触发构建、上传、评论或历史写入。
+- CLI / JS API / Vite 共用行为；真实网络异常的人工验收与离线模拟分别记录。
+
+### M2：让接入和交付成为可复用流程
+
+**交付内容**
+
+- [ ] Action 增加稳定 outputs，优先提供结果 JSON 文件、summary 文件、二维码产物路径和实际 CLI 版本；多平台结果放入 JSON，避免为每个平台扩充输入输出。
+- [ ] 补预览产物 artifact 示例、失败结果保留和 PR 反馈模板；先复用现有 release 评论能力。二维码 artifact 的下载入口不承诺可以直接作为评论中的图片地址。
+- [ ] 补 history 保存 / 恢复示例，按应用和环境隔离历史及体积趋势；发布记录带版本、commit 和产物标识。明确本地原子写入不提供跨 Runner 并发保护。
+- [ ] Action 输出实际执行的包版本及解析来源；审查浮动 ref 回退 `latest` 的行为，提供明确的版本锁定方式，避免用户无法复现。
+- [ ] 将 README 保留为快速开始和核心参考，把较长的 CI、诊断、平台限制指南拆到 `docs/`；每个示例标注已验证的入口。
+- [ ] 提供 GitHub Actions、GitLab CI、Jenkins / npm scripts 的最小示例：构建 → doctor → upload / preview → 收集结果。复用 CLI，不为每个 CI 平台再建一套执行逻辑。
+- [ ] 改善 `init` 的探测说明、必填项提示和非交互体验；保留现有配置，不默认修改用户流水线。
+
+GitHub composite action 可通过步骤的 `GITHUB_OUTPUT` 映射公开 outputs；本阶段采用官方机制。[GitHub composite action 文档](https://docs.github.com/en/actions/tutorials/create-actions/create-a-composite-action)
+
+**验收条件**
+
+- 至少两个仓库外的消费者项目完成接入，其中一个通过 GitHub Action，一个通过 CLI / JS API；至少一个项目走通真实上传和预览。
+- 单平台和多平台成功 / 失败都有机器可读结果；后续步骤无需解析人类日志。
+- 新 Runner 恢复正确历史后能展示体积差异，换应用或环境不会混用历史。
+- fork PR 无凭证时执行明确的离线路径，不尝试真实上传。
+
+### M3：在反馈明确后扩展工作流
+
+以下项目独立排序，不打包成一个大版本。每项开始前需要两个具体使用场景，或一个已有项目中可复现、反复出现的阻塞。
+
+| 候选方向 | 最小范围 | 验收重点 |
 | --- | --- | --- |
-| 上传 | `minidev.upload(opts)` | `version`、`experience`、`deleteVersion`、`versionDescription`、`isGame`；返回 `version`、`experienceQrCodeUrl` |
-| 预览 | `minidev.preview(opts)` | `page`、`pageQuery`、`query`、`scene`、`autoPush`、`ignoreHttpDomainCheck`；返回 `qrcodeUrl`、`qrcodeSchema`、`version` |
-| 打开 IDE | `minidev.startIde(opts)` | `project`、`appPath`、`lite`、`projectType` |
-| 最新版本 | `minidev.app.getUploadedVersion(opts)` | 返回字符串版本号 |
-| 版本列表 | `minidev.app.getUploadedVersionList(opts)` | 版本、状态、创建时间、操作人 |
-| 删除版本 | `minidev.app.deleteVersion(opts)` | 危险操作 |
-| 体验版 | `minidev.app.setExperience` / `cancelExperience` | 设置或取消体验版，返回体验版二维码 |
-| 本地构建 | `minidev.build(opts)` | `output`、`sourceMap`、`parallel`、`minify` |
-| 源码打包 | `minidev.pack(opts)` | 输出源码 zip |
-| 远程调试 | `minidev.remoteDebug(opts)` | 真机调试 |
+| 多应用 / 多环境 targets | 显式命名应用与环境，独立 appid、产物目录、版本与凭证引用；旧配置继续有效 | 选中目标准确，历史和二维码不串应用；CI 并发策略明确 |
+| 持续预览 | 先支持明确产物目录的 watch，等待构建完成并防抖，单目标串行，运行期间变化合并为下一次 | 不读半成品、不同时重复上传、失败后可恢复、退出无残留进程 |
+| monorepo 调度 | 先读取显式项目清单并按项目筛选，复用已有执行器 | 路径和配置隔离、单项目失败汇总；暂不自动扫描整个 workspace |
+| 代理与企业网络 | 有真实企业网络需求后验证平台 SDK 代理接入，处理不同平台差异 | 连接失败可解释，代理凭证不泄漏；真实网络场景通过 |
+| 安装成本优化 | 先测量安装耗时、磁盘体积与冷启动，再决定 SDK 拆包或可选依赖 | 改善有前后数据，单平台用户不会因其它 SDK 缺失而无法执行 |
 
-### 1.3 钉钉 `dingtalk-miniapp-opensdk`
+## 4. 架构调整跟随交付
 
-| 能力 | API | 说明 |
+- **先收敛执行与结果。** 把批量上传和 release 的公共执行逻辑集中，避免超时、预算与错误处理分别实现。
+- **能力声明保持内部使用。** 平台 / 项目类型的能力判断集中为数据，供 doctor、plan 和命令复用；有第三方适配需求前不发布通用插件协议。
+- **逐步拆分命令处理。** `src/cli.ts` 当前约 830 行，随 M1/M2 按命令提取处理器；保留 `runCli` / `parseCliArgs` 的公开兼容性，不先做大规模目录重构。
+- **逐步统一输出。** 现有 JSON、Markdown 输出消费公共结果；为命令成功、参数错误、执行失败建立契约样例，明确 `schemaVersion` 升级规则。
+- **持续保留打包消费者验证。** 同时覆盖 ESM 与 CommonJS 项目的配置加载、CLI 和库导出，不重复建设已有 pack / install 流程。
+
+## 5. 暂缓事项
+
+| 方向 | 暂缓原因 | 重新进入路线的条件 |
 | --- | --- | --- |
-| 上传 | `sdk.miniUpload(opts)` | 通过进度回调返回 `version`、`log` |
-| 预览 | 无 | SDK 未暴露预览能力 |
-| 打开 IDE / 模拟器 | 无 | 可另行集成 `dd`（DingTalk Design CLI）的 `dev` / 模拟器能力 |
-| 版本查询 / 列表 / 删除 | 无 | 只能从上传结果或进度回调拿版本号 |
-| NPM / SourceMap / 质量检查 | 无 | — |
+| 新增更多小程序平台 | 增加 SDK、凭证、测试和兼容维护成本 | 有具体使用者、可用官方接口与持续验证项目 |
+| 通用插件市场 / 第三方适配器 API | 当前内置三平台即可覆盖既有范围 | 出现无法通过配置或现有 JS API 解决的扩展 |
+| GUI / 发布管理 SaaS / 托管凭证 | 超出当前工具的维护规模 | 独立产品需求和维护投入明确 |
+| 自动提审、上架、线上回滚 | 与现有上传编排边界不同 | 平台接口、权限、恢复语义和真实项目验收齐备 |
+| 更多 IDE 命令、支付宝 pack 等 SDK API 补齐 | 暂无证据说明比主流程可靠性更重要 | 被实际工作流阻塞，且有明确验收方式 |
+| 默认自动重试上传、自动重发所有平台 | 可能重复提交已成功或状态未知的任务 | 有平台幂等依据或可验证的远端状态核对方案 |
 
-> 结论：钉钉只能做「上传 + 版本结果读取」，预览、版本管理等能力需要对用户显式说明。
+## 6. 1.0 的门槛
 
-## 2. 当前差距
+1. 正式支持的 Node / 系统 / SDK 组合有维护矩阵；每个正式支持的平台都有真实上传证据，预览等额外能力按矩阵验收。
+2. 至少两个外部消费者项目连续使用两个迭代周期，核心链路无未解决的阻塞问题；周期建议按两周复盘。
+3. 配置、CLI 参数、JS API、JSON 与退出码有明确兼容规则，旧配置迁移路径可执行。
+4. 超时、取消、部分失败、上传后预算超限、版本回退均可解释；涉及凭证的输出完成脱敏验证。
+5. npm / Action 版本对应、打包消费验证、发布记录与升级说明完整。
 
-当前 `@wot-ui/ci` 已具备：
+按验收门槛发布 1.0，不要求 watch、monorepo、更多平台或插件市场全部完成。
 
-- 三端上传
-- JS/TS 配置与环境变量
-- `.minicirc` / `uni-mini-ci` 兼容
-- JS API（`upload` / `uploadPlatform` / `uploadWeixin` 等）
-- 统一错误模型、结构化结果、CLI 退出码
+## 7. 下一轮可直接执行的任务
 
-尚缺：
+建议按以下顺序拆为小 PR；这是规划清单，不代表已经创建 Issue 或开始实现。
 
-- 预览（微信、支付宝）
-- 打开 / 关闭微信、支付宝开发者工具，自动化调试
-- 多平台批量执行
-- JSON 输出、dry-run、CI summary
-- 版本查询 / 版本策略
-- 包体积预算
-- 配置与凭证体检
-- 编辑器 / CI 平台集成
-
-## 3. 路线图
-
-### v0.4 — 预览、批量、CI 友好（P0）
-
-> 状态：预览、批量执行、`--json`、`--dry-run`、CI summary 均已实现。
-
-#### 3.1 预览能力
-
-用户故事：
-
-- 开发者改完代码，想直接生成预览二维码，不再打开开发者工具。
-- CI 在合并前生成预览二维码，贴到 PR 或群里。
-
-CLI：
-
-```sh
-wotci preview -p weixin
-wotci preview -p weixin --qr-format image --qr-output dist/preview-weixin.png
-wotci preview -p weixin --page pages/index/index --query "from=ci" --scene 1011
-wotci preview -p alipay
-wotci preview -p alipay --page pages/index/index --page-query "from=ci"
-```
-
-JS API：
-
-```ts
-import { preview, previewAlipay, previewWeixin } from '@wot-ui/ci'
-
-const result = await preview('weixin', { cwd: process.cwd() })
-// result.qrCode: { kind: 'file', value: '/abs/dist/preview-weixin.png' }
-
-const alipay = await preview('alipay', { cwd: process.cwd() })
-// alipay.qrCode: { kind: 'url', value: 'https://...' }
-```
-
-统一结果：
-
-```ts
-interface PreviewResult<TPlatform extends Platform, TRaw = unknown> {
-  platform: TPlatform
-  version?: string
-  qrCode: {
-    kind: 'file' | 'url' | 'terminal' | 'base64'
-    value: string
-  }
-  raw: TRaw
-}
-```
-
-平台差异：
-
-| 平台 | 默认行为 | 备注 |
-| --- | --- | --- |
-| 微信 | `qrcodeFormat: 'image'`，默认输出 `.wotci/preview/weixin.png` | `qrcodeOutputDest` 必须是可写路径；`terminal` 时直接打印终端二维码 |
-| 支付宝 | 打印 `qrcodeUrl` | 传 `--qr-output` 时下载二维码到本地 |
-| 钉钉 | 抛 `UnsupportedCapabilityError` | SDK 不提供预览 |
-
-配置建议放在平台配置内，保持内聚：
-
-```ts
-weixin: {
-  // 上传配置...
-  preview: {
-    qrcodeFormat: 'image',
-    qrcodeOutputDest: '.wotci/preview/weixin.png',
-    pagePath: 'pages/index/index',
-    scene: 1011,
-  },
-},
-alipay: {
-  // 上传配置...
-  preview: {
-    page: 'pages/index/index',
-    pageQuery: 'from=ci',
-    scene: '1011',
-    autoPush: false,
-  },
-},
-```
-
-验收：
-
-- `wotci preview -p weixin` 生成 PNG 并输出绝对路径
-- `wotci preview -p alipay` 输出可访问的二维码 URL
-- `wotci preview -p dingtalk` 返回明确的不支持错误和退出码
-- JS API 与 CLI 返回同构结果
-
-#### 3.2 多平台批量执行
-
-```sh
-wotci upload --all
-wotci upload -p weixin -p alipay
-wotci upload --all --concurrency 2
-wotci preview --all
-```
-
-- 默认按配置顺序串行执行，避免多个 SDK 子进程/编译缓存互相干扰
-- `--concurrency` 显式开启并行
-- 单个平台失败不中断其它平台，最后统一汇总并以非 0 退出
-- 结果中保留每个平台的成功/失败与耗时
-
-JS API：
-
-```ts
-import { uploadMany } from '@wot-ui/ci'
-
-const batch = await uploadMany(['weixin', 'alipay'], { cwd: process.cwd() })
-// batch.results / batch.failures / batch.ok
-```
-
-#### 3.3 CI 输出与安全开关
-
-```sh
-wotci upload --all --json
-wotci upload --all --dry-run
-wotci upload --all --summary "$GITHUB_STEP_SUMMARY"
-wotci upload --all --quiet
-```
-
-- `--json`：stdout 只输出 JSON，日志走 stderr；带 `schemaVersion`
-- `--dry-run`：只做配置、路径、密钥、版本校验，不发起网络请求
-- `--summary`：生成 Markdown 表格（平台、版本、包体积、耗时、结果）
-- `--timeout`：单平台超时，避免 CI 挂死
-- `--quiet` / `--verbose`：控制日志级别
-
-JSON 结构草案：
-
-```json
-{
-  "schemaVersion": 1,
-  "command": "upload",
-  "ok": false,
-  "results": [
-    {
-      "platform": "weixin",
-      "version": "1.2.3",
-      "sizes": { "total": 2048000, "main": 1024000 },
-      "durationMs": 18342
-    }
-  ],
-  "failures": [
-    {
-      "platform": "alipay",
-      "code": "UPLOAD_ERROR",
-      "message": "支付宝小程序上传失败"
-    }
-  ]
-}
-```
-
-### v0.4.1 — IDE 与本地开发集成（P0）
-
-> 状态：`open` / `close` / `quit` / `auto` / `status` / `ide preview`、`--dry-run`、CI 保护和路径探测均已实现。
-
-除了 CI 侧的上传/预览，日常开发里最高频的动作是「打开开发者工具」和「让 IDE 加载最新产物」。微信和支付宝都提供了可脚本化的 IDE 入口，可以一并收进 `wotci`。
-
-#### 3.4 打开 / 关闭开发者工具
-
-CLI：
-
-```sh
-wotci open -p weixin
-wotci open -p weixin --port 9420 --lang zh
-wotci open -p alipay
-wotci close -p weixin
-wotci ide status -p weixin
-```
-
-JS API：
-
-```ts
-import { closeIde, getIdeStatus, openIde } from '@wot-ui/ci'
-
-await openIde('weixin', { cwd: process.cwd(), port: 9420 })
-const status = await getIdeStatus('weixin')
-await closeIde('weixin')
-```
-
-平台能力：
-
-| 能力 | 微信 | 支付宝 | 钉钉 |
+| 顺序 | 任务 | 主要范围 | 交付物 |
 | --- | --- | --- | --- |
-| 打开项目 | `cli open --project` | `minidev.startIde({ project })` | 无官方 SDK |
-| 关闭项目 / 退出 IDE | `cli close` / `cli quit` | 无直接 API | 无 |
-| 登录状态 | `cli islogin` / `cli login` | `minidev.login` | 无 |
-| 自动化调试 | `cli auto`（automation 端口） | `minidev.dev` + devtools | 无 |
-| 构建 npm | `cli build-npm` 或 `packNpm` | 无 | 无 |
-| 本地 dev server | IDE 自身 watch | `minidev.dev` / `devWebSimulator` | `dd` CLI 的 dev |
-
-实现要点：
-
-- 微信 CLI 路径按平台探测，常见位置：
-  - macOS：`/Applications/wechatwebdevtools.app/Contents/MacOS/cli`
-  - Windows：微信开发者工具安装目录下的 `cli.bat`
-  - 允许通过 `weixin.ide.cliPath` 显式覆盖
-- 支付宝通过 `minidev.startIde({ project, appPath })` 打开，`appPath` 可配置
-- 找不到 IDE 时返回可操作的错误，提示安装路径或 `ide.cliPath` 配置
-- 在 `CI=true` 环境下默认拒绝打开 GUI，需要 `--force` 才执行，避免 CI 卡死
-- `--dry-run` 只打印将要执行的命令，不真正启动 IDE
-
-配置：
-
-```ts
-weixin: {
-  // ...
-  ide: {
-    cliPath: '/Applications/wechatwebdevtools.app/Contents/MacOS/cli',
-    port: 9420,
-    lang: 'zh',
-  },
-},
-alipay: {
-  // ...
-  ide: {
-    appPath: '/Applications/支付宝小程序开发者工具.app',
-  },
-},
-```
-
-#### 3.5 自动化调试与本地预览
-
-```sh
-# 微信自动化端口，供 miniprogram-automator / E2E 使用
-wotci auto -p weixin --port 9420
-
-# 支付宝启动 dev server（minidev.dev），再基于 dev 产物做真机预览
-wotci dev -p alipay
-wotci dev-preview -p alipay --page pages/index/index
-
-# 打开 IDE 并让 IDE 自己生成预览（不经过 miniprogram-ci）
-wotci ide preview -p weixin --qr-output dist/ide-preview.png
-```
-
-这些能力与 `wotci preview` 的区别：
-
-- `wotci preview`：走 `miniprogram-ci` / `minidev`，不依赖 IDE，适合 CI
-- `wotci ide preview`：走 IDE CLI，依赖本机 IDE 登录态，适合本地开发
-- `wotci auto`：只负责开启自动化端口，不生成二维码
-
-验收：
-
-- `wotci open -p weixin` 能在 macOS / Windows 打开对应项目
-- `wotci open -p alipay` 能打开支付宝 IDE
-- IDE 未安装、路径错误、未登录时给出明确错误
-- CI 环境下默认不启动 GUI
-- IDE 相关测试通过 mock child_process，不依赖真实 GUI
-
-### v0.4.2 — 发布编排与协作（已实现）
-
-> 状态：`wotci release`、构建命令、发布历史、PR 评论已实现。
-
-- `release` 依次执行构建命令、多平台上传，部分失败继续
-- 历史写入 `.wotci/history.json`，支持条数限制与原子写入
-- GitHub Actions 自动更新 PR 评论（marker 去重）
-- `--dry-run` 只输出计划
-
-### v0.5 — 版本、预算与体检（P1）
-
-> 状态：版本查询/策略、doctor、包体积预算、init、支付宝体验版管理均已实现。
-
-#### 3.6 版本查询
-
-```sh
-wotci version latest -p weixin
-wotci version latest -p alipay
-wotci version list -p alipay
-```
-
-- 微信：`getLatestVersion` → `latestVersion`、`grayReleaseVersion`
-- 支付宝：`getUploadedVersion` / `getUploadedVersionList`
-- 钉钉：不支持，返回 `UnsupportedCapabilityError`
-
-#### 3.7 版本策略
-
-在现有 `version` + `autoincrement` 之上增加显式策略，避免平台差异：
-
-```ts
-versionStrategy:
-  | { type: 'fixed'; version: string }
-  | { type: 'package' }
-  | { type: 'auto'; bump: 'patch' | 'minor' | 'major' }
-```
-
-行为：
-
-- `fixed`：使用配置版本
-- `package`：读取 `package.json` 版本
-- `auto`：查询线上最新版本后本地递增，再把结果传给三个平台
-- 支付宝、钉钉仍可保留平台侧 `autoincrement: true`
-
-#### 3.8 包体积预算
-
-```ts
-budgets: {
-  total: '3MB',
-  main: '1.5MB',
-  warnOnly: true,
-}
-```
-
-- 数据来源：微信 `subPackageInfo`（总包、主包、分包）
-- 支付宝、钉钉当前不返回包体积，跳过并给出说明
-- 超出预算时：`warnOnly` 仅告警，否则失败
-- CLI summary 与 JSON 都输出体积明细
-
-#### 3.9 支付宝体验版与版本管理
-
-```sh
-wotci experience set -p alipay --version 1.2.3
-wotci experience cancel -p alipay --version 1.2.3
-wotci version delete -p alipay --version 1.2.3 --yes
-```
-
-- 上传时支持 `experience: true`，结果中返回 `experienceQrCodeUrl`
-- 删除 / 取消体验版属于破坏性操作，必须显式 `--yes`
-- 默认只打印计划，不执行
-
-#### 3.10 `wotci doctor`
-
-```sh
-wotci doctor
-wotci doctor --offline
-wotci doctor --json
-```
-
-检查项：
-
-| 检查 | 说明 |
-| --- | --- |
-| Node 版本 | 是否满足 `>=20` |
-| 配置来源 | 是否存在多个配置文件冲突 |
-| 平台配置 | 必填字段、appid 格式、版本号格式 |
-| 产物目录 | 是否存在，是否包含 `project.config.json` / `app.json` |
-| 私钥 | 是否存在、可读、权限是否过宽、格式是否像 PEM |
-| SDK | `miniprogram-ci` / `minidev` 实际加载版本 |
-| 网络 | 可选：微信 `Project.attr()`、支付宝 `getUploadedVersion`，验证 key 与 IP 白名单 |
-| 预算 | 当前配置是否可计算 |
-
-### v0.6 — 构建与产物（P2）
-
-> 状态：构建 npm、SourceMap、编译产物导出、代码质量检查已实现；代理、源码打包待做。
-
-| 功能 | 说明 | 平台 |
-| --- | --- | --- |
-| 构建 npm | 上传/预览前执行 `packNpm`，`--build-npm` 开关 | 微信 |
-| SourceMap | `wotci sourcemap -p weixin --output sm.zip`，对应 `getDevSourceMap` | 微信 |
-| 编译产物检查 | `wotci inspect -p weixin --output compiled.zip`，对应 `getCompiledResult` | 微信 |
-| 代码质量 | `wotci quality -p weixin --output report.json`，对应 `checkCodeQuality` | 微信 |
-| 代理 | 配置 `proxy`，透传 `setCiProxy` / 环境变量 | 微信 |
-| 源码打包 | `wotci pack -p alipay`，对应 `minidev.pack` | 支付宝 |
-
-构建与诊断命令：
-
-```sh
-wotci build-npm -p weixin [--ignores a,b]
-wotci sourcemap -p weixin [--output sm.zip] [--robot 1] [--streaming]
-wotci inspect   -p weixin [--output compiled.zip]
-wotci quality   -p weixin [--output report.json]
-
-# 上传 / 预览前自动构建 npm
-wotci upload  -p weixin --build-npm
-wotci preview -p weixin --build-npm
-```
-
-`doctor` 会额外检查当前 `miniprogram-ci` 是否暴露上述诊断 API，缺失时给出 warn。
-
-### v0.7 — 集成（进行中）
-
-> 状态：`@wot-ui/ci/vite` 插件、GitHub Action 已实现；watch、monorepo、插件 API 待做。
-
-### v0.8+ — 扩展集成
-
-- `@wot-ui/ci/vite`：uni-app 构建完成后自动预览/上传
-- GitHub Action：复用 composite action，直接输出 summary 与二维码 artifact
-- `wotci preview --watch`：监听产物变化，持续生成预览二维码
-- monorepo：扫描 workspace 内多个小程序项目并批量执行
-
-## 4. 架构改造建议
-
-### 4.1 平台适配器
-
-把现有 `src/platforms/*` 升级为带能力声明的适配器：
-
-```ts
-interface PlatformAdapter<TConfig, TRaw> {
-  platform: Platform
-  capabilities: {
-    upload: true
-    preview: boolean
-    versionQuery: boolean
-    npmBuild: boolean
-    sourceMap: boolean
-  }
-  upload(config: WotciConfig, options: UploadOptions): Promise<UploadResult>
-  preview?(config: WotciConfig, options: PreviewOptions): Promise<PreviewResult>
-  getLatestVersion?(config: WotciConfig, options: UploadOptions): Promise<string>
-}
-```
-
-调用方先看 `capabilities`，缺失时抛 `UnsupportedCapabilityError`，CLI 输出统一提示。
-
-### 4.2 命令层
-
-当前 CLI 只有一个隐式 upload 命令。建议拆成：
-
-```
-src/commands/
-  upload.ts
-  preview.ts
-  doctor.ts
-  version.ts
-```
-
-保留兼容：
-
-- `wotci -p weixin` 等价于 `wotci upload -p weixin`
-- 现有 `runCli` / `parseCliArgs` 导出继续可用
-
-### 4.3 输出层
-
-- `HumanReporter`：彩色日志、表格、二维码
-- `JsonReporter`：stdout 单 JSON，日志走 stderr
-- `MarkdownReporter`：GitHub Step Summary
-
-报告器只消费统一结果对象，避免每个命令重复拼输出。
-
-### 4.4 配置类型
-
-新增建议：
-
-```ts
-interface WeixinConfig {
-  // ...
-  preview?: WeixinPreviewConfig
-  buildNpm?: boolean
-}
-
-interface AlipayConfig {
-  // ...
-  preview?: AlipayPreviewConfig
-  experience?: boolean
-}
-
-interface WotciConfig {
-  // ...
-  budgets?: BudgetConfig
-  versionStrategy?: VersionStrategy
-}
-
-interface WeixinIdeConfig {
-  cliPath?: string
-  port?: number
-  lang?: 'zh' | 'en'
-}
-
-interface AlipayIdeConfig {
-  appPath?: string
-}
-```
-
-## 5. 测试与验收
-
-- 保持 statements / branches / functions / lines 95% 以上阈值，新代码继续按 100% 目标补
-- 新增能力的单元测试全部 mock SDK，不依赖真实密钥
-- 预览测试覆盖：PNG 路径、URL、terminal、base64、不可写路径、平台能力缺失
-- IDE 测试覆盖：命令拼装、路径探测、未安装、CI 环境拒绝、子进程退出码
-- 批量测试覆盖：全成功、部分失败、并发、超时、JSON 输出快照
-- Windows 路径、二维码文件写入、GitHub summary 需要跨平台用例
-- 真实上传/预览只放在手动或 nightly job，PR 中不跑
-
-## 6. 风险与待确认
-
-1. **钉钉能力缺失**：钉钉只有上传。预览、版本查询、体验版都无法对齐，需要对用户显式说明。
-2. **预览二维码差异**：微信可以输出文件/终端/base64，支付宝只返回远程 URL；统一结果必须保留 `kind`。
-3. **并行上传风险**：微信 SDK 会 fork 子进程，多个平台并行可能有构建缓存/端口冲突；默认串行更稳。
-4. **包体积预算仅微信可用**：支付宝、钉钉上传结果不含包体积。
-5. **破坏性操作**：支付宝删除版本、取消体验版必须二次确认并支持 `--dry-run`。
-6. **`checkCodeQuality` / `cloud` 依赖官方服务**：需要真实项目验证后再决定是否纳入主线。
-7. **IDE 路径与登录态**：微信/支付宝 IDE 的 CLI 路径、版本和登录态因机器而异；需要路径探测 + 显式配置兜底。
-8. **GUI 副作用**：打开 IDE 会抢占焦点、启动 GUI，CI 中必须默认禁用；自动化端口只监听 localhost。
-
-## 7. 建议实施顺序
-
-1. 平台适配器 + capabilities（不改行为，先重构）
-2. 预览（微信、支付宝）+ CLI/JS API
-3. 打开/关闭 IDE、自动化调试（本地开发集成）
-4. 批量执行 + JSON + dry-run + summary
-5. doctor
-6. 版本查询 + 版本策略 + 预算
-7. npm 构建 / SourceMap / 产物检查
-8. Vite 插件 / GitHub Action
-
-建议先做 **v0.4（预览 + 批量 + CI 输出）**，这是投入产出比最高的一组能力。
+| 1 | 支持矩阵与真实验收清单 | `docs/`、现有 playground workflow | 状态模板、平台限制、可复跑步骤；有凭证后附实测记录 |
+| 2 | 运行时验证与覆盖率门禁 | `.github/workflows/`、`vitest.config.ts` | Node 24/26 验证结果，单 job 95% 门禁；按结果单独决定最低版本调整 |
+| 3 | 结果与版本来源契约 | `src/types.ts`、`src/version-strategy.ts`、`src/output/` | 降级可见、上传与预算状态分离、兼容样例和测试 |
+| 4 | 超时和取消最小闭环 | `src/batch.ts`、`src/release/`、平台执行层 | 先微信主链路验证进程清理，再扩展其它平台 |
+| 5 | release 分阶段检查与错误诊断 | `src/plan.ts`、`src/release/`、错误输出 | 构建前后检查、明确 dry-run 语义、脱敏回归 |
+| 6 | Action 结果输出与接入模板 | `action.yml`、`scripts/github-action.sh`、文档 | 可消费结果文件、二维码 artifact、history 示例 |
+
+先完成任务 1～2 校准基线，再推进任务 3～5，验收后发布 0.5；任务 6 作为 0.6 的起点。排期以 SDK 兼容验证和真实平台可用条件为依据，不在缺少这些条件时承诺发布日期。
+
+每个里程碑结束记录：首次接入遇到的步骤、失败原因分类、安装与执行耗时、已验证组合及未解决问题。根据这些记录调整下一阶段，不以新增命令数量衡量进展。
