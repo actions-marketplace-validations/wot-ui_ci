@@ -63,18 +63,49 @@ jobs:
     uses: sxzz/workflows/.github/workflows/release.yml@v1
     with:
       publish: true
+      # 只发 npm：release 由下面的 draft job 生成，
+      # 因为这里拿不到 changelogithub 的 --from/--to 参数（原因见 draft job 的注释）
+      github-release: false
     permissions:
       contents: write
       id-token: write
 
-  ensure-draft:
-    name: Ensure draft release
+  draft:
+    name: Create draft release
     needs: release
     runs-on: ubuntu-latest
     permissions:
       contents: write
     steps:
-      - name: Draft release must exist for this tag
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - uses: actions/setup-node@v4
+        with:
+          # changelogithub v15 要求 Node ^22.19
+          node-version: 22
+
+      - name: Generate release notes for an explicit tag range
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          TAG: ${{ github.ref_name }}
+        run: |
+          set -euo pipefail
+
+          # changelogithub 默认用 `git tag --points-at HEAD` 推断 --to：
+          #   * 同一提交上挂多个 tag（比如移动后的 v0）时会得到 "v0\nv0.4.1" 这种多行 ref
+          #   * 推断出 from == to 时静默生成 "0 commits / No significant changes"
+          # v0.4.1 的 release notes 就是这么空的。这里显式给定区间，结果稳定可复现。
+          if prev=$(git describe --tags --abbrev=0 "${TAG}^" 2>/dev/null); then
+            echo "变更区间：$prev -> $TAG"
+            npx --yes changelogithub@15 --from "$prev" --to "$TAG" --draft
+          else
+            echo "没有上一个 tag，按首次发布处理：-> $TAG"
+            npx --yes changelogithub@15 --to "$TAG" --draft
+          fi
+
+      - name: Draft release must exist
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           TAG: ${{ github.ref_name }}
@@ -82,7 +113,7 @@ jobs:
           set -euo pipefail
 
           if ! gh release view "$TAG" -R "$GITHUB_REPOSITORY" --json isDraft,url > release.json 2>/dev/null; then
-            echo "::error::没有找到 $TAG 的 GitHub Release。changelog.github 那步带 continue-on-error，失败会被静默吞掉，去日志里翻 changelogithub 的输出。"
+            echo "::error::没有为 $TAG 创建出 release"
             exit 1
           fi
 
@@ -90,13 +121,13 @@ jobs:
             const fs = require("node:fs")
             const { isDraft, url } = JSON.parse(fs.readFileSync("release.json", "utf8"))
             if (!isDraft) {
-              console.error("::error::release 已经是正式发布状态，Marketplace 复选框不会再出现。检查 changelogithub.config.json 的 draft 配置。")
+              console.error("::error::release 已经是正式发布状态，Marketplace 复选框不会再出现。检查 changelogithub 是否带了 --draft。")
               process.exit(1)
             }
             fs.appendFileSync(process.env.GITHUB_STEP_SUMMARY, [
               "## 还差一步：勾选 Marketplace",
               "",
-              `1. 打开 ${url}（draft release）`,
+              `1. 打开 ${url}（draft release），顺手扫一眼 release notes 是否为空`,
               "2. 勾选 **Publish this Action to the GitHub Marketplace**",
               "3. 选择 Primary / Secondary category 后点 **Publish release**",
               "",

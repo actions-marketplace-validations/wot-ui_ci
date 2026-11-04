@@ -25,8 +25,10 @@ tag 推送后 `Release` workflow（[release.yml](../.github/workflows/release.ym
 | 阶段 | 内容 |
 | --- | --- |
 | `verify` | tag 与 `package.json` 版本一致、`action.yml` 合规、`changelogithub.config.json` 仍是 draft、lint、typecheck、test、build |
-| `release` | `pnpm publish`（OIDC trusted publishing）+ `changelogithub` 建 **draft** release |
-| `ensure-draft` | 断言 release 存在且确实是 draft，并把下一步操作指引写进 Job Summary |
+| `release` | 只做 `pnpm publish`（OIDC trusted publishing），不建 release |
+| `draft` | 用**显式 tag 区间**生成 draft release（`git describe` 找上一个 tag），并断言它确实是 draft，把下一步指引写进 Job Summary |
+
+> 为什么不复用 `sxzz/workflows` 自带的 changelog 步骤：它内部只执行 `pnpx changelogithub`，传不进 `--from/--to`。changelogithub 于是用 `git tag --points-at HEAD` 推断区间——同一提交上挂着多个 tag（比如浮动 `v0`）时会得到多行的 ref，推断出 `from == to` 时则静默产出「0 commits / No significant changes」。v0.4.1 的 release notes 就是这么空的。所以 `release` job 传 `github-release: false`，由 `draft` job 自己指定区间。
 
 然后**人工**（约 10 秒）：
 
@@ -53,6 +55,20 @@ tag 推送后 `Release` workflow（[release.yml](../.github/workflows/release.ym
 
 > `uses: wot-ui/ci@v0` 要等 0.4.1 发布、`major-tag` job 跑完才存在。在那之前请用 `@v0.4.1`。
 
+## release notes 是空的怎么修
+
+说明 `draft`/`ensure-draft` 那步的区间推断出了问题（多见于 0.4.1 及更早）。本地重新生成后覆盖即可：
+
+```sh
+# 1. 本地生成正确 notes（需要能访问 GitHub）
+npx changelogithub@15 --from v0.4.0 --to v0.4.1 --output notes.md
+
+# 2. 覆盖已发布的 release body
+gh release edit v0.4.1 --notes-file notes.md
+```
+
+没有 `gh` 登录的话，网页上 Edit release 把 `notes.md` 的内容粘进去也一样。
+
 ## 忘了勾选 / listing 落后怎么办
 
 ```text
@@ -68,6 +84,7 @@ Releases → 该版本 → Delete release（弹窗里不要勾删 tag）
 - [ ] 版本号用 `pnpm release` 改，别手改 `package.json`（`verify` 会拦）
 - [ ] 改了 `action.yml` 的 inputs 后，确认 `scripts/github-action.sh` 里接了 `INPUT_*`（`verify:action` 会拦）
 - [ ] 新增 release 默认仍是 draft（别删 `changelogithub.config.json`）
+- [ ] 上架前扫一眼 draft 的 release notes 不是空的（空了说明区间推断出了问题，先修再发）
 - [ ] 上架后隔一分钟看一眼 Marketplace listing 的版本号
 
 ## 本地自检
