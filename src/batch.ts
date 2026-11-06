@@ -7,6 +7,7 @@ import type {
   Platform,
   PlatformInput,
   PlatformPlan,
+  VersionResolution,
 } from './types'
 import { formatBudgetReport, isBudgetFailure } from './budget'
 import { loadConfig } from './config'
@@ -35,6 +36,11 @@ export async function previewMany(
   return runBatch<AnyPreviewResult>('preview', request)
 }
 
+/**
+ * 按选定平台执行上传或预览，逐项汇总结果；上传共享一次版本解析依据。
+ * dry-run 仅做本地计划校验，JSON 模式将版本查询和执行阶段的 SDK 日志转到 stderr。
+ * @throws 配置或版本解析失败时在平台执行前终止；平台执行异常记录在各项结果中。
+ */
 async function runBatch<TResult>(
   action: 'upload' | 'preview',
   request: BatchRequest,
@@ -46,17 +52,19 @@ async function runBatch<TResult>(
   })
   const cwd = loaded.cwd
   const platforms = resolvePlatforms(request.platforms, loaded.config)
-  const config = action === 'upload'
-    ? applyVersion(loaded.config, await resolveVersion(loaded.config, {
-        allowNetwork: !request.dryRun,
-        cwd,
-        packageJson: loaded.packageJson,
-        platforms,
-      }))
-    : loaded.config
-
   if (!platforms.length)
     throw new ConfigError('没有可执行的平台，请配置 weixin / alipay / dingtalk 或指定 platforms。')
+
+  const resolve = (): Promise<VersionResolution> => resolveVersion(loaded.config, {
+    allowNetwork: !request.dryRun,
+    cwd,
+    packageJson: loaded.packageJson,
+    platforms,
+  })
+  const versionResolution = action === 'upload'
+    ? await (request.redirectStdoutToStderr ? redirectStdoutToStderr(resolve) : resolve())
+    : undefined
+  const config = versionResolution ? applyVersion(loaded.config, versionResolution) : loaded.config
 
   const startedAt = Date.now()
 
@@ -75,6 +83,7 @@ async function runBatch<TResult>(
     }
 
     return {
+      ...(versionResolution ? { versionResolution } : {}),
       dryRun: true,
       durationMs: Date.now() - startedAt,
       ok: results.every(item => item.ok),
@@ -132,6 +141,7 @@ async function runBatch<TResult>(
     : await run()
 
   return {
+    ...(versionResolution ? { versionResolution } : {}),
     dryRun: false,
     durationMs: Date.now() - startedAt,
     ok: results.every(item => item.ok),

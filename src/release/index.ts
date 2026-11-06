@@ -34,19 +34,20 @@ export async function release(request: ReleaseRequest = {}): Promise<ReleaseResu
   const cwd = loaded.cwd
   const releaseConfig = loaded.config.release ?? {}
   const platforms = resolvePlatforms(request.platforms, releaseConfig.platforms, loaded.config)
-  const config = applyVersion(loaded.config, await resolveVersion(loaded.config, {
+  if (!platforms.length)
+    throw new ConfigError('没有可发布的平台，请配置 weixin / alipay / dingtalk 或指定 platforms。')
+
+  const versionResolution = await resolveVersion(loaded.config, {
     allowNetwork: !request.dryRun,
     cwd,
     packageJson: loaded.packageJson,
     platforms,
-  }))
+  })
+  const config = applyVersion(loaded.config, versionResolution)
   const commands = resolveBuildCommands(request.buildCommand ?? releaseConfig.buildCommand)
   const skipBuild = request.skipBuild ?? false
   const dryRun = request.dryRun ?? false
   const git = await readGitInfo(cwd)
-
-  if (!platforms.length)
-    throw new ConfigError('没有可发布的平台，请配置 weixin / alipay / dingtalk 或指定 platforms。')
 
   if (dryRun) {
     return {
@@ -68,6 +69,7 @@ export async function release(request: ReleaseRequest = {}): Promise<ReleaseResu
         platform,
       })),
       version: config.version,
+      versionResolution,
     }
   }
 
@@ -92,6 +94,7 @@ export async function release(request: ReleaseRequest = {}): Promise<ReleaseResu
     ok,
     platforms: platformResults,
     version: config.version,
+    versionResolution,
   }
 
   const historyEnabled = request.history ?? releaseConfig.history ?? true
@@ -255,6 +258,7 @@ function attachSizeTrend(
   }
 }
 
+/** 为发布结果生成历史标识和时间，保留构建、平台结果及版本解析依据。 */
 function createHistoryRecord(result: ReleaseResult): ReleaseHistoryRecord {
   return {
     build: result.build,
@@ -266,5 +270,6 @@ function createHistoryRecord(result: ReleaseResult): ReleaseHistoryRecord {
     ok: result.ok,
     platforms: result.platforms,
     version: result.version,
+    versionResolution: result.versionResolution,
   }
 }

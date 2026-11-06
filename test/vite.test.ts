@@ -47,6 +47,27 @@ async function runBundle(plugin: ReturnType<typeof wotciPlugin>) {
 }
 
 describe('wotciPlugin', () => {
+  it('上传日志和结果回调保留版本回退依据', async () => {
+    const versionResolution = {
+      source: 'auto',
+      version: '1.0.1',
+      baseSource: 'package',
+      baseVersion: '1.0.0',
+      tentative: true,
+      queries: [{ platform: 'weixin', status: 'unsupported' }],
+      warnings: ['weixin：不支持版本查询。'],
+    }
+    mocks.uploadMany.mockResolvedValueOnce({ ...successResult, versionResolution })
+    const onResult = vi.fn()
+    const { plugin, logger } = createPlugin({ action: 'upload', onResult })
+
+    await runBundle(plugin)
+
+    expect(onResult).toHaveBeenCalledWith(expect.objectContaining({ versionResolution }))
+    expect(logger.info).toHaveBeenCalledWith(expect.stringContaining('基础 package: 1.0.0'))
+    expect(logger.info).toHaveBeenCalledWith(expect.stringContaining('警告：weixin：不支持版本查询'))
+  })
+
   it('默认在构建后预览，并从 UNI_PLATFORM 推断平台', async () => {
     vi.stubEnv('UNI_PLATFORM', 'mp-weixin')
     const { plugin } = createPlugin({ configFile: 'wotci.config.ts' })

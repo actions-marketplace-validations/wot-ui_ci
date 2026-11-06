@@ -19,6 +19,7 @@ export function renderBatchJson(
     ok: result.ok,
     results: result.results.map(serializeItem),
     schemaVersion: 1,
+    ...(result.versionResolution ? { versionResolution: result.versionResolution } : {}),
   }
 
   return `${JSON.stringify(payload, null, 2)}\n`

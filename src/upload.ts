@@ -64,7 +64,9 @@ export async function upload(
   const resolution = await resolveVersion(loaded.config, {
     cwd: loaded.cwd,
     packageJson: loaded.packageJson,
+    platforms: [normalizePlatform(platform)],
   })
 
-  return uploadPlatform(platform, applyVersion(loaded.config, resolution), { cwd: loaded.cwd })
+  const result = await uploadPlatform(platform, applyVersion(loaded.config, resolution), { cwd: loaded.cwd })
+  return { ...result, versionResolution: resolution }
 }
