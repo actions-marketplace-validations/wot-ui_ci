@@ -10,6 +10,7 @@ import { mkdir, writeFile } from 'node:fs/promises'
 import path from 'node:path'
 import process from 'node:process'
 import { resolveFromCwd } from '../utils/path'
+import { formatVersionResolution } from './version'
 
 /** 生成 CI Step Summary 的 Markdown 表格 */
 export function renderBatchSummary(
@@ -64,6 +65,8 @@ export function renderBatchSummary(
     }
   }
 
+  if (result.versionResolution)
+    lines.push('', ...formatVersionResolution(result.versionResolution).map(line => `- ${escapeCell(line)}`))
   return `${lines.join('\n')}\n`
 }
 

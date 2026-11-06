@@ -1,12 +1,22 @@
 import type {
   Platform,
   VersionBump,
+  VersionQueryResult,
   VersionResolution,
   VersionStrategy,
   WotciConfig,
 } from './types'
-import { VersionError } from './errors'
+import { VersionError, VersionUnsupportedError } from './errors'
 import { compareVersion } from './utils/version'
+
+const QUERY_STATUS_LABELS: Record<VersionQueryResult['status'], string> = {
+  success: '查询成功',
+  failed: '版本查询失败',
+  unsupported: '不支持版本查询',
+  empty: '未返回线上版本',
+  invalid: '线上版本格式无效',
+  skipped: '离线模式未查询',
+}
 
 export interface ResolveVersionOptions {
   cwd: string
@@ -33,44 +43,91 @@ export async function resolveVersion(
 
   if (strategy.type === 'package') {
     const version = options.packageJson?.version ?? config.version
-    return { source: 'package', ...(version ? { version } : {}) }
+    const baseSource = options.packageJson?.version !== undefined
+      ? 'package'
+      : version ? 'config' : 'none'
+    return {
+      source: 'package',
+      ...(version ? { version, baseVersion: version } : {}),
+      baseSource,
+      warnings: baseSource === 'package' ? [] : ['package.json 未提供版本，使用配置版本（若存在）。'],
+    }
   }
 
   return resolveAutoVersion(config, strategy, options)
 }
 
+/**
+ * 查询目标平台并递增最高有效版本；无有效线上版本时回退到 package / 配置版本。
+ * 返回逐平台状态和警告；任一查询未成功或目标为空时标记暂定，离线模式不查询。
+ * @throws {VersionError} 联网严格模式查询不完整，或无法取得有效基础版本时抛出。
+ */
 async function resolveAutoVersion(
   config: WotciConfig,
   strategy: Extract<VersionStrategy, { type: 'auto' }>,
   options: ResolveVersionOptions,
 ): Promise<VersionResolution> {
-  const platforms = options.platforms?.length
-    ? options.platforms
-    : (['weixin', 'alipay'] as Platform[]).filter(platform => Boolean(config[platform]))
-  const latestVersions: string[] = []
+  const platforms = [...new Set(options.platforms
+    ?? (['weixin', 'alipay', 'dingtalk'] as Platform[]).filter(platform => Boolean(
+      platform === 'dingtalk' ? config.dingtalk ?? config.dd : config[platform],
+    )))]
+  const queries: VersionQueryResult[] = []
 
-  if (options.allowNetwork !== false) {
+  if (options.allowNetwork === false) {
+    for (const platform of platforms)
+      queries.push({ platform, status: 'skipped' })
+  }
+  else {
     const { getLatestVersion } = await import('./version')
 
     for (const platform of platforms) {
       try {
         const info = await getLatestVersion(platform, { config, cwd: options.cwd })
-        if (info.latest && isVersion(info.latest))
-          latestVersions.push(info.latest)
+        if (!info.latest)
+          queries.push({ platform, status: 'empty' })
+        else if (!isVersion(info.latest))
+          queries.push({ platform, status: 'invalid' })
+        else
+          queries.push({ platform, status: 'success', version: info.latest })
       }
-      catch {
-        // 单个平台查询失败时继续使用其它平台
+      catch (error) {
+        // 不输出 SDK 原始错误，避免 URL、请求参数或凭据进入 JSON / 历史。
+        queries.push({ platform, status: error instanceof VersionUnsupportedError ? 'unsupported' : 'failed' })
       }
     }
   }
 
-  const latest = latestVersions.sort(compareVersion).at(-1)
+  const warnings = queries.filter(query => query.status !== 'success').map(query => (
+    `${query.platform}：${QUERY_STATUS_LABELS[query.status]}。`
+  ))
+  if (!platforms.length)
+    warnings.push('未选择版本查询平台。')
+
+  const tentative = !queries.length || queries.some(query => query.status !== 'success')
+  if (strategy.strict && options.allowNetwork !== false && tentative)
+    throw new VersionError(`严格自动版本策略要求所有目标返回有效版本，已停止上传。${warnings.join('')}`)
+
+  const latest = queries.flatMap(query => query.version ? [query.version] : []).sort(compareVersion).at(-1)
   const base = latest ?? options.packageJson?.version ?? config.version
+  const baseSource = latest !== undefined ? 'platform' : options.packageJson?.version !== undefined ? 'package' : 'config'
 
   if (!base || !isVersion(base))
     throw new VersionError('无法解析自动版本号，请配置 version 或 package.json version')
 
-  return { source: 'auto', version: bumpVersion(base, strategy.bump) }
+  if (!latest)
+    warnings.push(`未取得有效线上版本，回退到 ${baseSource} 基础版本。`)
+  else if (tentative)
+    warnings.push('仅使用查询成功的平台版本，无法确认其它目标的最新版本。')
+
+  return {
+    source: 'auto',
+    version: bumpVersion(base, strategy.bump),
+    baseVersion: base,
+    baseSource,
+    queries,
+    tentative,
+    warnings,
+  }
 }
 
 export function bumpVersion(version: string, bump: VersionBump): string {

@@ -9,6 +9,7 @@ import type {
 import process from 'node:process'
 import { createConsola } from 'consola'
 import { previewMany, uploadMany } from './batch'
+import { formatVersionResolution } from './output/version'
 
 export interface WotciViteOptions {
   /** 构建完成后的动作，默认 preview；false 关闭 */
@@ -86,6 +87,9 @@ export function wotciPlugin(options: WotciViteOptions = {}): Plugin {
         : await previewMany(request)
 
       options.onResult?.(result)
+
+      for (const line of formatVersionResolution(result.versionResolution))
+        logger.info(line)
 
       for (const item of result.results) {
         if (item.ok)

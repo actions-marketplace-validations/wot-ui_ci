@@ -2,6 +2,7 @@ import type { ReleaseResult } from '../types'
 import { readFile } from 'node:fs/promises'
 import process from 'node:process'
 import { ReleaseError } from '../errors'
+import { formatVersionResolution } from '../output/version'
 
 export const RELEASE_COMMENT_MARKER = '<!-- wotci-release -->'
 
@@ -103,7 +104,7 @@ export function renderReleaseComment(
   if (!result.platforms.length)
     lines.push('| - | - | - | - | - | - |')
 
-  lines.push('')
+  lines.push('', ...formatVersionResolution(result.versionResolution).map(line => `- ${escapeCell(line)}`))
 
   const buildText = result.build.skipped
     ? '跳过'

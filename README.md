@@ -549,19 +549,32 @@ wotci preview -p alipay --qr-output dist/preview-alipay.png
 ```ts
 export default defineConfig({
   versionStrategy: { type: 'auto', bump: 'patch' },
+  // 要求全部目标查询成功：{ type: 'auto', bump: 'patch', strict: true }
   // 或 { type: 'fixed', version: '1.2.3' }
   // 或 { type: 'package' }
 })
 ```
 
 - `fixed`：使用配置版本
-- `package`：读取 `package.json` 的 version
-- `auto`：查询线上最新版本后本地递增，不会修改 `package.json`
+- `package`：读取 `package.json` 的 version；缺失时使用配置版本，并输出回退警告
+- `auto`：只查询本次实际上传的目标，取查询成功的最高版本递增；无有效查询结果时按 `package.json` → 配置版本回退，不会修改 `package.json`
 - 微信取 `getLatestVersion`，但仅 `miniProgramPlugin` / `miniGamePlugin` 项目支持；普通小程序请用 `fixed` / `package` 策略，支付宝取 `getUploadedVersion`
-- 钉钉没有版本查询能力，会回退到 `package.json` / 配置版本
-- `--dry-run` 时 `auto` 不发起网络请求，使用 `package.json` 版本递增
+- 钉钉没有版本查询能力；单独上传时回退到 `package.json` / 配置版本，多平台时可使用其它目标查询成功的版本
+- 默认允许查询失败或部分查询成功，输出警告和 `tentative: true`。`strict: true` 要求所有目标均返回有效数字版本；失败、不支持、空值或无效版本都会在上传前终止，`release` 也会在构建前终止
+- `--dry-run` 时 `auto` 不发起网络请求，使用 `package.json` / 配置版本递增，查询状态为 `skipped`、版本为暂定；严格模式也允许生成离线计划，实际执行时仍须查询通过
 
-版本策略会应用到 `upload`、`uploadMany`、`release`，只影响本次上传的版本号。
+版本策略会应用到 `upload`、`uploadMany`、`release`（以及 Vite 上传），只影响本次上传的版本号。单平台 CLI 加上 `--json` / `--summary` 不会改变查询目标或版本选择。底层 `uploadPlatform` / 各平台上传函数直接使用传入版本，不执行版本策略。
+
+高层 JS API 结果、上传/发布 JSON 的顶层以及发布历史记录包含可选字段 `versionResolution`；CLI、Vite 日志和 Step Summary 展示同一份依据。JSON 与历史 schema 版本仍为 1，旧字段保持不变；旧历史记录可以没有此字段。
+
+| 字段 | 含义 |
+| --- | --- |
+| `source` / `version` | 保留原有策略名称与最终版本的语义；`source: 'auto'` 不表示查询一定成功 |
+| `baseSource` / `baseVersion` | `auto` / `package` 的实际基础来源（`platform`、`package`、`config`；无版本时为 `none`）与递增前版本 |
+| `queries` | `auto` 的目标平台、查询状态及成功取得的版本；状态为 `success`、`failed`、`unsupported`、`empty`、`invalid`、`skipped` |
+| `tentative` / `warnings` | 是否有任一目标未取得有效线上版本（含离线 dry-run 与部分成功；未选择查询目标时也为暂定），以及查询/回退警告；不保存 SDK 原始异常或凭据 |
+
+自动递增不提供跨进程锁，也不保证版本全局唯一。严格模式只能保证本次查询完整，不能消除并发发布竞争。
 
 各平台版本号规则：
 
@@ -1029,8 +1042,9 @@ const list = await getVersionList('alipay', { cwd: process.cwd() })
 const resolution = await resolveVersion(loaded.config, {
   cwd: loaded.cwd,
   packageJson: loaded.packageJson,
+  platforms: ['alipay'], // 只查询本次准备上传的平台；省略时读取全部已配置平台
 })
-console.log(resolution.version, resolution.source)
+console.log(resolution.version, resolution.baseSource, resolution.queries, resolution.warnings)
 ```
 
 ### 体验版与版本管理

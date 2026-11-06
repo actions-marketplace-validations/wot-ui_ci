@@ -223,7 +223,7 @@ export type VersionBump = 'major' | 'minor' | 'patch'
 export type VersionStrategy
   = | { type: 'fixed', version?: string }
     | { type: 'package' }
-    | { type: 'auto', bump: VersionBump }
+    | { type: 'auto', bump: VersionBump, strict?: boolean }
 
 /** 支付宝版本列表项 */
 export interface VersionRecord {
@@ -449,6 +449,8 @@ export interface ReleaseGitInfo {
 
 /** release 结果 */
 export interface ReleaseResult {
+  /** 本次上传的版本解析依据 */
+  versionResolution?: VersionResolution
   ok: boolean
   dryRun: boolean
   version?: string
@@ -487,6 +489,8 @@ export interface ReleaseRequest extends UploadOptions {
 
 /** 发布历史单条记录 */
 export interface ReleaseHistoryRecord {
+  /** 旧历史记录可能不含此字段 */
+  versionResolution?: VersionResolution
   id: string
   createdAt: string
   version?: string
@@ -516,6 +520,8 @@ export interface BatchItemResult<T = unknown> {
 
 /** 批量执行结果 */
 export interface BatchResult<T = unknown> {
+  /** 上传的共享版本解析依据；预览不解析版本策略 */
+  versionResolution?: VersionResolution
   ok: boolean
   dryRun: boolean
   durationMs: number
@@ -653,10 +659,24 @@ export interface DoctorRequest extends UploadOptions {
   network?: boolean
 }
 
-/** 版本策略解析结果 */
+/** 单个平台的自动版本查询状态；不包含 SDK 原始错误或凭据 */
+export interface VersionQueryResult {
+  platform: Platform
+  status: 'success' | 'failed' | 'unsupported' | 'empty' | 'invalid' | 'skipped'
+  version?: string
+}
+
+/** 版本策略解析结果，新增字段可选以兼容既有调用方 */
 export interface VersionResolution {
   version?: string
+  /** 策略名称，保留原有语义；实际基础版本来源见 baseSource */
   source: 'fixed' | 'package' | 'auto' | 'none'
+  baseVersion?: string
+  baseSource?: 'platform' | 'package' | 'config' | 'none'
+  queries?: VersionQueryResult[]
+  /** 自动版本未获得所有目标的有效线上版本，包含离线 dry-run */
+  tentative?: boolean
+  warnings?: string[]
 }
 
 /** 版本查询请求 */
@@ -739,6 +759,8 @@ export interface DingtalkUploadRawResult {
 
 /** 单平台上传结果 */
 export interface UploadResult<TPlatform extends Platform = Platform, TRaw = unknown> {
+  /** 高层 upload API 的版本解析依据；底层 uploadPlatform 不执行策略 */
+  versionResolution?: VersionResolution
   platform: TPlatform
   version: string
   desc?: string

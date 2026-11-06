@@ -1,6 +1,7 @@
 import type {
   IdeAction,
   PlatformInput,
+  ReleaseResult,
   WeixinBuildNpmResult,
   WeixinDiagnosticResult,
   WeixinQualityResult,
@@ -24,6 +25,7 @@ import {
 } from './messages'
 import { renderBatchJson } from './output/json'
 import { renderBatchSummary, renderDiagnosticSummary, writeBatchSummary } from './output/summary'
+import { formatVersionResolution } from './output/version'
 import { previewPlatform } from './preview'
 import { release } from './release'
 import { renderReleaseComment } from './release/github'
@@ -83,6 +85,10 @@ export interface ParsedCliArgs {
 
 const CLI_COMMANDS = new Set<CliCommand>(['upload', 'release', 'preview', 'open', 'close', 'auto', 'doctor', 'init', 'build-npm', 'sourcemap', 'inspect', 'quality'])
 
+/**
+ * 解析 CLI 参数并分派命令，按文本或 JSON 模式输出执行结果及版本依据。
+ * @returns 成功返回 0，参数、执行或预算检查失败返回 1；捕获的异常写入错误日志。
+ */
 export async function runCli(argv: string[] = process.argv.slice(2), options: RunCliOptions = {}): Promise<number> {
   let logger = createCliLogger(options)
 
@@ -354,6 +360,9 @@ export async function runCli(argv: string[] = process.argv.slice(2), options: Ru
             scene: args.scene,
           })
 
+      for (const line of formatVersionResolution(result.versionResolution))
+        logger.info(line)
+
       if (args.summary) {
         const summaryPath = await writeBatchSummary(
           args.summary,
@@ -395,7 +404,7 @@ export async function runCli(argv: string[] = process.argv.slice(2), options: Ru
       const platformInput = args.platform
         ? args.platform.split(',').map(item => item.trim()).filter(Boolean) as PlatformInput[]
         : undefined
-      const result = await release({
+      const runRelease = (): Promise<ReleaseResult> => release({
         buildCommand: args.build,
         config: loaded.config,
         cwd: loaded.cwd,
@@ -406,6 +415,10 @@ export async function runCli(argv: string[] = process.argv.slice(2), options: Ru
         prComment: args.prComment,
         skipBuild: args.skipBuild,
       })
+
+      const result = args.json ? await redirectStdoutToStderr(runRelease) : await runRelease()
+      for (const line of formatVersionResolution(result.versionResolution))
+        logger.info(line)
 
       if (result.build.error)
         logger.error(`构建失败：${result.build.error.message}`)
@@ -539,7 +552,10 @@ export async function runCli(argv: string[] = process.argv.slice(2), options: Ru
     const resolution = await resolveVersion(loaded.config, {
       cwd: loaded.cwd,
       packageJson: loaded.packageJson,
+      platforms: [platform],
     })
+    for (const line of formatVersionResolution(resolution))
+      logger.info(line)
     const result = await uploadPlatform(platform, applyVersion(loaded.config, resolution), {
       cwd: loaded.cwd,
       ...(args.buildNpm ? { buildNpm: true } : {}),

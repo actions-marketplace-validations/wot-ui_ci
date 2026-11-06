@@ -178,6 +178,7 @@ export type {
   VersionInfo,
   VersionMutationRequest,
   VersionMutationResult,
+  VersionQueryResult,
   VersionRecord,
   VersionRequest,
   VersionResolution,

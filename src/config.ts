@@ -202,6 +202,10 @@ async function resolveConfigValue(value: unknown, context: ConfigFactoryContext,
   return normalizeConfig(resolved as WotciConfig, label)
 }
 
+/**
+ * 校验平台、预算、版本策略和发布配置的结构，并将旧 dd 别名归一为 dingtalk。
+ * @throws {ConfigError} 配置字段类型或策略取值无效时抛出带配置来源的错误。
+ */
 function normalizeConfig(config: WotciConfig, label: string): WotciConfig {
   for (const key of PLATFORM_KEYS) {
     const value = config[key]
@@ -224,6 +228,8 @@ function normalizeConfig(config: WotciConfig, label: string): WotciConfig {
       const bump = config.versionStrategy.bump
       if (bump !== 'major' && bump !== 'minor' && bump !== 'patch')
         throw new ConfigError(`${label}中的 versionStrategy.bump 无效：${String(bump)}`)
+      if (config.versionStrategy.strict !== undefined && typeof config.versionStrategy.strict !== 'boolean')
+        throw new ConfigError(`${label}中的 versionStrategy.strict 必须是布尔值`)
     }
   }
 

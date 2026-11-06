@@ -451,6 +451,15 @@ describe('release 配置校验', () => {
 })
 
 describe('versionStrategy 配置校验', () => {
+  it('strict 只接受布尔值', async () => {
+    await expect(loadConfig({ config: { versionStrategy: { type: 'auto', bump: 'patch', strict: 'true' as unknown as boolean } } }))
+      .rejects
+      .toThrow('versionStrategy.strict 必须是布尔值')
+    await expect(loadConfig({ config: { versionStrategy: { type: 'auto', bump: 'patch', strict: false } } }))
+      .resolves
+      .toMatchObject({ config: { versionStrategy: { strict: false } } })
+  })
+
   it('非法 type / bump 抛出 ConfigError', async () => {
     const badType = await createProject({
       type: 'module',
